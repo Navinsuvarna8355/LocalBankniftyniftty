@@ -13,6 +13,9 @@ logging.basicConfig(level=logging.INFO)
 def fetch_option_chain_from_api(symbol='BANKNIFTY'):
     """
     Fetches live option chain data from a third-party API.
+    
+    This function has been updated to use a requests.Session to handle
+    cookies and prevent 401 Unauthorized errors from the NSE website.
     """
     api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     
@@ -23,7 +26,16 @@ def fetch_option_chain_from_api(symbol='BANKNIFTY'):
 
     try:
         logging.info(f"Fetching data from third-party API for {symbol}...")
-        response = requests.get(api_url, headers=headers, timeout=10)
+        
+        # Use a requests session to maintain cookies
+        session = requests.Session()
+        
+        # First request to the homepage to get the session cookie
+        homepage_url = "https://www.nseindia.com/"
+        session.get(homepage_url, headers=headers, timeout=10)
+        
+        # Second request to the actual API, which will use the session cookie
+        response = session.get(api_url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
         logging.info("Data fetched successfully.")
