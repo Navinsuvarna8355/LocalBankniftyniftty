@@ -130,7 +130,7 @@ def display_dashboard(symbol, info, signal, suggested_side):
     # Main container
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     
-    st.header("NSE Option Chain Dashboard", help="Live analysis of NIFTY and BANKNIFTY based on PCR strategy.")
+    st.subheader(f"{symbol} Option Chain Dashboard", help="Live analysis based on PCR strategy.")
     st.divider()
 
     col1, col2, col3 = st.columns(3)
@@ -173,19 +173,16 @@ def main():
     st.title("NSE Option Chain Analysis Dashboard")
     st.markdown("This dashboard provides live analysis of NIFTY and BANKNIFTY based on a custom trading strategy.")
 
-    # Initialize session state for the trade log if it doesn't exist
+    # Initialize session state for the trade log and data
     if 'trade_log' not in st.session_state:
         st.session_state.trade_log = []
+    if 'data' not in st.session_state:
+        st.session_state.data = {
+            'NIFTY': None,
+            'BANKNIFTY': None,
+        }
 
-    # UI for symbol selection on the main page
-    symbol_choice = st.radio(
-        "Select Symbol",
-        ["NIFTY", "BANKNIFTY"],
-        index=0,
-        horizontal=True
-    )
-
-    # UI for EMA signal selection in the sidebar
+    # UI for EMA signal selection and other options in the sidebar
     ema_signal_choice = st.sidebar.radio(
         "Select EMA Signal",
         ["BUY", "SELL"],
@@ -195,59 +192,88 @@ def main():
     )
     
     use_near_pcr = st.sidebar.checkbox("Use Near Expiry PCR?", value=True)
-
+    
     # Refresh and Log buttons
     col_button1, col_button2 = st.sidebar.columns(2)
     refresh_button = col_button1.button("Refresh Data")
-    log_button = col_button2.button("Log Trade")
 
     # --- Data Fetching and Display Logic ---
-    dashboard_placeholder = st.empty()
     
     # Use a flag to trigger refresh
     if refresh_button or 'force_refresh' not in st.session_state or st.session_state.force_refresh:
         try:
-            with st.spinner(f"Fetching live data for {symbol_choice}... Please wait."):
-                data = fetch_option_chain_from_api(symbol_choice)
-                info = compute_oi_pcr_and_underlying(data)
+            with st.spinner("Fetching live data for NIFTY and BANKNIFTY... Please wait."):
+                nifty_data = fetch_option_chain_from_api('NIFTY')
+                banknifty_data = fetch_option_chain_from_api('BANKNIFTY')
+                
+                nifty_info = compute_oi_pcr_and_underlying(nifty_data)
+                banknifty_info = compute_oi_pcr_and_underlying(banknifty_data)
             
             # Store calculated info in session state
-            st.session_state.current_data = {
-                'underlying': info['underlying'],
-                'pcr_total': info['pcr_total'],
-                'pcr_near': info['pcr_near'],
+            st.session_state.data['NIFTY'] = {
+                'underlying': nifty_info['underlying'],
+                'pcr_total': nifty_info['pcr_total'],
+                'pcr_near': nifty_info['pcr_near'],
                 'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'use_near_pcr': use_near_pcr,
-                'pcr_used': info['pcr_near'] if use_near_pcr else info['pcr_total'],
-                'trend': "BULLISH" if (info['pcr_near'] if use_near_pcr else info['pcr_total']) >= 1 else "BEARISH",
+                'pcr_used': nifty_info['pcr_near'] if use_near_pcr else nifty_info['pcr_total'],
+                'trend': "BULLISH" if (nifty_info['pcr_near'] if use_near_pcr else nifty_info['pcr_total']) >= 1 else "BEARISH",
                 'ema_signal': ema_signal_choice
             }
-
+            st.session_state.data['BANKNIFTY'] = {
+                'underlying': banknifty_info['underlying'],
+                'pcr_total': banknifty_info['pcr_total'],
+                'pcr_near': banknifty_info['pcr_near'],
+                'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'use_near_pcr': use_near_pcr,
+                'pcr_used': banknifty_info['pcr_near'] if use_near_pcr else banknifty_info['pcr_total'],
+                'trend': "BULLISH" if (banknifty_info['pcr_near'] if use_near_pcr else banknifty_info['pcr_total']) >= 1 else "BEARISH",
+                'ema_signal': ema_signal_choice
+            }
+            
             st.session_state.force_refresh = False
 
         except Exception as e:
-            st.error(f"Error fetching data for {symbol_choice}: {e}")
+            st.error(f"Error fetching data: {e}")
             st.info("Please click 'Refresh Data' to try again.")
             st.session_state.force_refresh = False
 
-    # Display the dashboard from session state
-    if 'current_data' in st.session_state:
-        info = st.session_state.current_data
-        
-        # Determine signal based on the stored data and user selection
-        signal, suggested_side = determine_signal(
-            info['pcr_used'],
-            info['trend'],
-            info['ema_signal']
-        )
-        
-        with dashboard_placeholder.container():
-            display_dashboard(symbol_choice, info, signal, suggested_side)
+    # Display the dashboards side by side
+    col_nifty, col_banknifty = st.columns(2)
+    
+    with col_nifty:
+        if st.session_state.data['NIFTY']:
+            nifty_info = st.session_state.data['NIFTY']
+            nifty_signal, nifty_suggested_side = determine_signal(
+                nifty_info['pcr_used'],
+                nifty_info['trend'],
+                nifty_info['ema_signal']
+            )
+            display_dashboard('NIFTY', nifty_info, nifty_signal, nifty_suggested_side)
+    
+    with col_banknifty:
+        if st.session_state.data['BANKNIFTY']:
+            banknifty_info = st.session_state.data['BANKNIFTY']
+            banknifty_signal, banknifty_suggested_side = determine_signal(
+                banknifty_info['pcr_used'],
+                banknifty_info['trend'],
+                banknifty_info['ema_signal']
+            )
+            display_dashboard('BANKNIFTY', banknifty_info, banknifty_signal, banknifty_suggested_side)
+    
+    # UI for logging trade
+    log_symbol_choice = st.sidebar.radio(
+        "Select Symbol to Log",
+        ["NIFTY", "BANKNIFTY"],
+        index=0
+    )
+    
+    log_button = col_button2.button("Log Trade")
 
     # --- Trade Logging Logic ---
     if log_button:
-        if 'current_data' in st.session_state:
-            info = st.session_state.current_data
+        if st.session_state.data[log_symbol_choice]:
+            info = st.session_state.data[log_symbol_choice]
             signal, suggested_side = determine_signal(
                 info['pcr_used'],
                 info['trend'],
@@ -257,7 +283,7 @@ def main():
             if signal != "SIDEWAYS":
                 log_entry = {
                     "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Symbol": symbol_choice,
+                    "Symbol": log_symbol_choice,
                     "Signal": signal,
                     "Suggested Option": f"₹{round(info['underlying']/100)*100} {suggested_side}",
                     "Live Price": f"₹ {info['underlying']:.2f}",
