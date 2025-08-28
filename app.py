@@ -160,7 +160,6 @@ def display_dashboard(symbol, info, signal, suggested_side):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-
 def main():
     """
     Main function to run the Streamlit app.
@@ -178,13 +177,14 @@ def main():
     # Initialize session state for the trade log and data
     if 'trade_log' not in st.session_state:
         st.session_state.trade_log = []
-    # Initialize the data for both symbols to avoid fetch errors on first run
     if 'nifty_data' not in st.session_state:
         st.session_state.nifty_data = None
     if 'banknifty_data' not in st.session_state:
         st.session_state.banknifty_data = None
-
-
+    # Add a flag to prevent multiple logs for the same signal
+    if 'last_logged_signal' not in st.session_state:
+        st.session_state.last_logged_signal = {}
+    
     # UI for EMA signal selection and other options in the sidebar
     ema_signal_choice = st.sidebar.radio(
         "Select EMA Signal",
@@ -196,9 +196,11 @@ def main():
     
     use_near_pcr = st.sidebar.checkbox("Use Near Expiry PCR?", value=True)
     
-    # Refresh and Log buttons
-    col_button1, col_button2 = st.sidebar.columns(2)
-    refresh_button = col_button1.button("Refresh Data")
+    # Add a new input for Lot Size
+    lot_size = st.sidebar.number_input("Lot Size", min_value=1, value=1, step=1)
+
+    # Refresh button
+    refresh_button = st.sidebar.button("Refresh Data")
     
     # UI for symbol selection on the main page
     symbol_choice = st.radio(
@@ -207,8 +209,6 @@ def main():
         index=0,
         horizontal=True
     )
-    
-    log_button = col_button2.button("Log Trade")
 
     # --- Data Fetching and Display Logic ---
     
@@ -220,93 +220,143 @@ def main():
                 data = fetch_option_chain_from_api(symbol_choice)
                 info = compute_oi_pcr_and_underlying(data)
             
+            pcr_used = info['pcr_near'] if use_near_pcr else info['pcr_total']
+            trend = "BULLISH" if pcr_used >= 1 else "BEARISH"
+            signal, suggested_side = determine_signal(pcr_used, trend, ema_signal_choice)
+            
             # Store calculated info in session state
-            if symbol_choice == 'NIFTY':
-                st.session_state.nifty_data = {
-                    'underlying': info['underlying'],
-                    'pcr_total': info['pcr_total'],
-                    'pcr_near': info['pcr_near'],
-                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    'use_near_pcr': use_near_pcr,
-                    'pcr_used': info['pcr_near'] if use_near_pcr else info['pcr_total'],
-                    'trend': "BULLISH" if (info['pcr_near'] if use_near_pcr else info['pcr_total']) >= 1 else "BEARISH",
-                    'ema_signal': ema_signal_choice
-                }
-            elif symbol_choice == 'BANKNIFTY':
-                st.session_state.banknifty_data = {
-                    'underlying': info['underlying'],
-                    'pcr_total': info['pcr_total'],
-                    'pcr_near': info['pcr_near'],
-                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    'use_near_pcr': use_near_pcr,
-                    'pcr_used': info['pcr_near'] if use_near_pcr else info['pcr_total'],
-                    'trend': "BULLISH" if (info['pcr_near'] if use_near_pcr else info['pcr_total']) >= 1 else "BEARISH",
-                    'ema_signal': ema_signal_choice
-                }
+            current_data = {
+                'underlying': info['underlying'],
+                'pcr_total': info['pcr_total'],
+                'pcr_near': info['pcr_near'],
+                'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'use_near_pcr': use_near_pcr,
+                'pcr_used': pcr_used,
+                'trend': trend,
+                'ema_signal': ema_signal_choice,
+                'signal': signal,
+                'suggested_side': suggested_side,
+                'lot_size': lot_size # Store the current lot size for the dashboard
+            }
 
+            if symbol_choice == 'NIFTY':
+                st.session_state.nifty_data = current_data
+            elif symbol_choice == 'BANKNIFTY':
+                st.session_state.banknifty_data = current_data
+            
         except Exception as e:
             st.error(f"Error fetching data for {symbol_choice}: {e}")
             st.info("Please click 'Refresh Data' to try again.")
 
+    # --- Auto-Log and P&L Update Logic ---
+    current_info = None
+    if symbol_choice == 'NIFTY' and st.session_state.nifty_data:
+        current_info = st.session_state.nifty_data
+    elif symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data:
+        current_info = st.session_state.banknifty_data
+
+    if current_info and current_info['signal'] != "SIDEWAYS":
+        # Check if the signal has changed since the last log
+        log_key = f"{symbol_choice}_{current_info['signal']}"
+        if st.session_state.last_logged_signal.get(log_key) != current_info['last_update']:
+            
+            # Log the new trade
+            log_entry = {
+                "Timestamp": current_info['last_update'],
+                "Symbol": symbol_choice,
+                "Signal": current_info['signal'],
+                "Suggested Option": f"₹{round(current_info['underlying']/100)*100} {current_info['suggested_side']}",
+                "Entry Price": current_info['underlying'],
+                "Exit Time": "-",
+                "Current Price": current_info['underlying'], # Initial current price is the entry price
+                "P&L": 0.0,
+                "Final P&L": "-",
+                "Used PCR": f"{current_info['pcr_used']:.2f}",
+                "Lot Size": lot_size, # Log the lot size
+                "Status": "Active" # To track active trades
+            }
+            st.session_state.trade_log.append(log_entry)
+            st.session_state.last_logged_signal[log_key] = current_info['last_update']
+    
+    # Update P&L for all active trades in the log
+    current_nifty_price = st.session_state.nifty_data['underlying'] if st.session_state.nifty_data else None
+    current_banknifty_price = st.session_state.banknifty_data['underlying'] if st.session_state.banknifty_data else None
+
+    # Handle 'Exit Trade' button clicks
+    for i, entry in enumerate(st.session_state.trade_log):
+        if entry['Status'] == "Active":
+            exit_button_key = f"exit_button_{i}"
+            if st.sidebar.button(f"Exit Trade {entry['Symbol']}", key=exit_button_key):
+                current_price = None
+                if entry['Symbol'] == 'NIFTY' and current_nifty_price:
+                    current_price = current_nifty_price
+                elif entry['Symbol'] == 'BANKNIFTY' and current_banknifty_price:
+                    current_price = current_banknifty_price
+                
+                if current_price:
+                    entry['Status'] = "Closed"
+                    entry['Exit Time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    entry['Current Price'] = current_price
+                    # Calculate final P&L
+                    pnl_calc = (current_price - entry['Entry Price']) * entry['Lot Size'] if entry['Signal'] == "BUY" else (entry['Entry Price'] - current_price) * entry['Lot Size']
+                    entry['P&L'] = 0.0 # Reset live P&L for closed trade
+                    entry['Final P&L'] = pnl_calc
+                    st.success(f"Trade for {entry['Symbol']} has been exited. Final P&L: ₹{pnl_calc:.2f}")
+
+    # Update P&L for all active trades
+    for entry in st.session_state.trade_log:
+        if entry['Status'] == "Active":
+            current_symbol = entry['Symbol']
+            current_signal = entry['Signal']
+            current_entry_price = entry['Entry Price']
+            
+            if current_symbol == 'NIFTY' and current_nifty_price:
+                current_price = current_nifty_price
+            elif current_symbol == 'BANKNIFTY' and current_banknifty_price:
+                current_price = current_banknifty_price
+            else:
+                continue
+
+            # Calculate live P&L based on signal and lot size
+            if current_signal == "BUY":
+                pnl = (current_price - current_entry_price) * entry['Lot Size']
+            else: # SELL
+                pnl = (current_entry_price - current_price) * entry['Lot Size']
+
+            entry['Current Price'] = current_price
+            entry['P&L'] = pnl
+
     # Display the dashboard based on the selected symbol
     if symbol_choice == 'NIFTY' and st.session_state.nifty_data:
         info = st.session_state.nifty_data
-        signal, suggested_side = determine_signal(
-            info['pcr_used'],
-            info['trend'],
-            info['ema_signal']
-        )
-        display_dashboard(symbol_choice, info, signal, suggested_side)
+        display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'])
     elif symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data:
         info = st.session_state.banknifty_data
-        signal, suggested_side = determine_signal(
-            info['pcr_used'],
-            info['trend'],
-            info['ema_signal']
-        )
-        display_dashboard(symbol_choice, info, signal, suggested_side)
+        display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'])
     else:
         st.info("Please select a symbol and click 'Refresh Data' to view the dashboard.")
     
-    # --- Trade Logging Logic ---
-    if log_button:
-        info = None
-        if symbol_choice == 'NIFTY' and st.session_state.nifty_data:
-            info = st.session_state.nifty_data
-        elif symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data:
-            info = st.session_state.banknifty_data
-
-        if info:
-            signal, suggested_side = determine_signal(
-                info['pcr_used'],
-                info['trend'],
-                info['ema_signal']
-            )
-            
-            if signal != "SIDEWAYS":
-                log_entry = {
-                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Symbol": symbol_choice,
-                    "Signal": signal,
-                    "Suggested Option": f"₹{round(info['underlying']/100)*100} {suggested_side}",
-                    "Live Price": f"₹ {info['underlying']:.2f}",
-                    "Used PCR": f"{info['pcr_used']:.2f}",
-                }
-                st.session_state.trade_log.append(log_entry)
-            else:
-                st.warning("Cannot log a trade for a 'SIDEWAYS' signal.")
-        else:
-            st.warning("Please refresh the data first to get a signal to log.")
-
     # Display the trade log
     st.subheader("Trade Log")
     if st.session_state.trade_log:
-        df_log = pd.DataFrame(st.session_state.trade_log)
-        st.dataframe(df_log)
+        # Create a new list of entries to display
+        display_log = []
+        for entry in st.session_state.trade_log:
+            # Create a copy to avoid modifying the original session state dicts
+            display_entry = entry.copy()
+            # Format P&L based on status
+            display_entry['P&L (Live/Final)'] = f"₹{display_entry['P&L']:.2f}" if display_entry['Status'] == 'Active' else f"₹{display_entry['Final P&L']:.2f}"
+            display_log.append(display_entry)
+        
+        df_log = pd.DataFrame(display_log)
+        
+        # Drop the intermediate P&L and Final P&L columns
+        df_log = df_log.drop(columns=['P&L', 'Final P&L'])
+        
+        # Apply color styling
+        st.dataframe(df_log.style.apply(lambda x: ['background: #d4edda' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) > 0 else 'background: #f8d7da' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) < 0 else '' for i in x], axis=1))
     else:
         st.info("Trade log is empty. Log a trade above.")
     
-
 if __name__ == "__main__":
     main()
-
