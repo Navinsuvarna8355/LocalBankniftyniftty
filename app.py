@@ -159,6 +159,24 @@ def display_dashboard(symbol, info, signal, suggested_side):
     st.warning("Disclaimer: This is for educational purposes only. Do not use for live trading.")
 
     st.markdown('</div>', unsafe_allow_html=True)
+    
+def display_simulated_sms(phone_number, message_type, trade_details):
+    """
+    Displays a simulated SMS message in the Streamlit app.
+    """
+    if not phone_number:
+        return
+
+    full_message = f"नंबर: {phone_number}\n"
+    if message_type == "entry":
+        full_message += f"नया ट्रेड: {trade_details['Symbol']} में {trade_details['Signal']} सिग्नल। एंट्री प्राइस: ₹{trade_details['Entry Price']:.2f}"
+    elif message_type == "exit":
+        full_message += f"ट्रेड बंद: {trade_details['Symbol']} का ट्रेड बंद हुआ। एक्ज़िट प्राइस: ₹{trade_details['Current Price']:.2f}। P&L: ₹{trade_details['Final P&L']:.2f}"
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("SMS नोटिफिकेशन")
+    st.sidebar.info(full_message)
+
 
 def main():
     """
@@ -185,26 +203,29 @@ def main():
     if 'last_logged_signal' not in st.session_state:
         st.session_state.last_logged_signal = {}
     
-    # UI for EMA signal selection and other options in the sidebar
+    # --- UI for user inputs in the sidebar ---
+    st.sidebar.header("सेटिंग्स")
+    phone_number = st.sidebar.text_input("अपना फ़ोन नंबर डालें", help="यह केवल एक सिमुलेशन है। असल में SMS नहीं भेजा जाएगा।")
+
     ema_signal_choice = st.sidebar.radio(
-        "Select EMA Signal",
+        "EMA सिग्नल चुनें",
         ["BUY", "SELL"],
         index=0,
         horizontal=True,
-        help="Select 'BUY' for bullish EMA crossover or 'SELL' for bearish."
+        help="बुलिश (bullish) EMA क्रॉसओवर के लिए 'BUY' या बेयरिश (bearish) के लिए 'SELL' चुनें।"
     )
     
-    use_near_pcr = st.sidebar.checkbox("Use Near Expiry PCR?", value=True)
+    use_near_pcr = st.sidebar.checkbox("क्या नज़दीकी एक्सपायरी PCR का उपयोग करें?", value=True)
     
     # Add a new input for Lot Size
-    lot_size = st.sidebar.number_input("Lot Size", min_value=1, value=1, step=1)
+    lot_size = st.sidebar.number_input("लॉट साइज़", min_value=1, value=1, step=1)
 
     # Refresh button
-    refresh_button = st.sidebar.button("Refresh Data")
+    refresh_button = st.sidebar.button("डेटा रिफ्रेश करें")
     
     # UI for symbol selection on the main page
     symbol_choice = st.radio(
-        "Select Symbol",
+        "सिंबल चुनें",
         ["NIFTY", "BANKNIFTY"],
         index=0,
         horizontal=True
@@ -246,7 +267,7 @@ def main():
             
         except Exception as e:
             st.error(f"Error fetching data for {symbol_choice}: {e}")
-            st.info("Please click 'Refresh Data' to try again.")
+            st.info("Please click 'डेटा रिफ्रेश करें' to try again.")
 
     # --- Auto-Log and P&L Update Logic ---
     current_info = None
@@ -277,16 +298,26 @@ def main():
             }
             st.session_state.trade_log.append(log_entry)
             st.session_state.last_logged_signal[log_key] = current_info['last_update']
-    
-    # Update P&L for all active trades in the log
+            
+            # Display simulated SMS for trade entry
+            display_simulated_sms(phone_number, "entry", log_entry)
+
+    # Auto-exit logic for active trades
     current_nifty_price = st.session_state.nifty_data['underlying'] if st.session_state.nifty_data else None
     current_banknifty_price = st.session_state.banknifty_data['underlying'] if st.session_state.banknifty_data else None
+    
+    # Get the latest signal for the selected symbol to check for exit conditions
+    current_signal_for_exit = current_info['signal'] if current_info else None
 
-    # Handle 'Exit Trade' button clicks
-    for i, entry in enumerate(st.session_state.trade_log):
-        if entry['Status'] == "Active":
-            exit_button_key = f"exit_button_{i}"
-            if st.sidebar.button(f"Exit Trade {entry['Symbol']}", key=exit_button_key):
+    # Iterate over a copy to avoid issues with modifying the list while iterating
+    for entry in list(st.session_state.trade_log):
+        if entry['Status'] == "Active" and entry['Symbol'] == symbol_choice:
+            # Check for exit conditions
+            # Exit if the current signal is opposite of the entry signal or is 'SIDEWAYS'
+            if (current_signal_for_exit == "SELL" and entry['Signal'] == "BUY") or \
+               (current_signal_for_exit == "BUY" and entry['Signal'] == "SELL") or \
+               (current_signal_for_exit == "SIDEWAYS"):
+                
                 current_price = None
                 if entry['Symbol'] == 'NIFTY' and current_nifty_price:
                     current_price = current_nifty_price
@@ -294,15 +325,22 @@ def main():
                     current_price = current_banknifty_price
                 
                 if current_price:
-                    entry['Status'] = "Closed"
-                    entry['Exit Time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    entry['Current Price'] = current_price
-                    # Calculate final P&L
-                    pnl_calc = (current_price - entry['Entry Price']) * entry['Lot Size'] if entry['Signal'] == "BUY" else (entry['Entry Price'] - current_price) * entry['Lot Size']
-                    entry['P&L'] = 0.0 # Reset live P&L for closed trade
-                    entry['Final P&L'] = pnl_calc
-                    st.success(f"Trade for {entry['Symbol']} has been exited. Final P&L: ₹{pnl_calc:.2f}")
-
+                    # Find the original entry in the session state to modify it
+                    for original_entry in st.session_state.trade_log:
+                        if original_entry['Timestamp'] == entry['Timestamp'] and original_entry['Symbol'] == entry['Symbol']:
+                            original_entry['Status'] = "Closed"
+                            original_entry['Exit Time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            original_entry['Current Price'] = current_price
+                            # Calculate final P&L
+                            pnl_calc = (current_price - original_entry['Entry Price']) * original_entry['Lot Size'] if original_entry['Signal'] == "BUY" else (original_entry['Entry Price'] - current_price) * original_entry['Lot Size']
+                            original_entry['P&L'] = 0.0 # Reset live P&L for closed trade
+                            original_entry['Final P&L'] = pnl_calc
+                            st.success(f"Trade for {original_entry['Symbol']} has been auto-exited. Final P&L: ₹{pnl_calc:.2f}")
+                            
+                            # Display simulated SMS for trade exit
+                            display_simulated_sms(phone_number, "exit", original_entry)
+                            break
+    
     # Update P&L for all active trades
     for entry in st.session_state.trade_log:
         if entry['Status'] == "Active":
@@ -334,10 +372,10 @@ def main():
         info = st.session_state.banknifty_data
         display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'])
     else:
-        st.info("Please select a symbol and click 'Refresh Data' to view the dashboard.")
+        st.info("कृपया एक सिंबल चुनें और डैशबोर्ड देखने के लिए 'डेटा रिफ्रेश करें' पर क्लिक करें।")
     
     # Display the trade log
-    st.subheader("Trade Log")
+    st.subheader("ट्रेड लॉग")
     if st.session_state.trade_log:
         # Create a new list of entries to display
         display_log = []
@@ -356,7 +394,7 @@ def main():
         # Apply color styling
         st.dataframe(df_log.style.apply(lambda x: ['background: #d4edda' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) > 0 else 'background: #f8d7da' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) < 0 else '' for i in x], axis=1))
     else:
-        st.info("Trade log is empty. Log a trade above.")
+        st.info("ट्रेड लॉग खाली है। ऊपर से एक ट्रेड लॉग करें।")
     
 if __name__ == "__main__":
     main()
