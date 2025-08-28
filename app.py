@@ -10,30 +10,41 @@ import time
 # Logging setup for debugging (debugging ke liye logging)
 logging.basicConfig(level=logging.INFO)
 
-# --- Data Fetching Functions ---
-def fetch_option_chain_from_api(symbol, retries=3, backoff_factor=0.5):
+# --- Session Management for Headers ---
+# Yeh function NSE ke session se dynamic headers fetch karega
+def get_nse_headers():
     """
-    Fetches live option chain data from a third-party API with retry logic.
-    (Retry logic ke saath ek third-party API se live option chain data fetch karta hai.)
+    Fetches dynamic headers from NSE website to mimic a real user session.
+    (Asli user session ki nakal karne ke liye NSE website se dynamic headers fetch karta hai.)
     """
-    api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
-    
-    headers = {
+    session = requests.Session()
+    session.get("https://www.nseindia.com", headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+    })
+    return {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
         'Referer': 'https://www.nseindia.com/option-chain',
         'Connection': 'keep-alive',
         'Accept-Encoding': 'gzip, deflate, br',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'cookie': "; ".join([f"{k}={v}" for k, v in session.cookies.items()])
     }
 
-    session = requests.Session()
-    session.get("https://www.nseindia.com/", headers=headers)
+# --- Data Fetching Functions ---
+def fetch_option_chain_from_api(symbol, retries=3, backoff_factor=0.5):
+    """
+    Fetches live option chain data from a third-party API with retry logic and dynamic headers.
+    (Retry logic aur dynamic headers ke saath ek third-party API se live option chain data fetch karta hai.)
+    """
+    api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     
     for i in range(retries):
         try:
             logging.info(f"Attempting to fetch data for {symbol}, attempt {i+1} of {retries}...")
-            response = session.get(api_url, headers=headers, timeout=10)
+            headers = get_nse_headers()
+            response = requests.get(api_url, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
             logging.info("Data fetched successfully.")
@@ -53,26 +64,16 @@ def fetch_option_chain_from_api(symbol, retries=3, backoff_factor=0.5):
 
 def fetch_vix_data(retries=3, backoff_factor=0.5):
     """
-    Fetches the India VIX value from a public NSE API with retry logic.
-    (Retry logic ke saath NSE public API se India VIX ki value fetch karta hai.)
+    Fetches the India VIX value from a public NSE API with retry logic and dynamic headers.
+    (Retry logic aur dynamic headers ke saath NSE public API se India VIX ki value fetch karta hai.)
     """
     vix_api_url = "https://www.nseindia.com/api/all-indices"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.nseindia.com/market-data/live-equity-market',
-        'Connection': 'keep-alive',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
-    }
 
-    session = requests.Session()
-    session.get("https://www.nseindia.com/", headers=headers)
-    
     for i in range(retries):
         try:
             logging.info("Fetching India VIX data...")
-            response = session.get(vix_api_url, headers=headers, timeout=10)
+            headers = get_nse_headers()
+            response = requests.get(vix_api_url, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
             
