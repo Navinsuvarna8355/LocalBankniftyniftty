@@ -7,14 +7,16 @@ import logging
 from datetime import datetime
 import time
 
-# Logging setup for debugging
+# Logging setup for debugging (debugging ke liye logging)
 logging.basicConfig(level=logging.INFO)
 
 # --- Data Fetching Functions ---
 def fetch_option_chain_from_api(symbol):
     """
     Fetches live option chain data from a third-party API.
+    (Ek third-party API se live option chain data fetch karta hai.)
     Uses a fresh requests.Session for each request to avoid stale sessions.
+    (Har request ke liye ek naya requests.Session istemal karta hai taake session ya cookies expire na hon.)
     """
     api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     
@@ -40,6 +42,7 @@ def fetch_option_chain_from_api(symbol):
 def fetch_vix_data():
     """
     Fetches the India VIX value from a public NSE API.
+    (NSE public API se India VIX ki value fetch karta hai.)
     """
     vix_api_url = "https://www.nseindia.com/api/all-indices"
     headers = {
@@ -66,6 +69,7 @@ def fetch_vix_data():
 def compute_oi_pcr_and_underlying(data):
     """
     Computes PCR and gets underlying price from the fetched data.
+    (Fetched data se PCR aur underlying price compute karta hai.)
     """
     if not data or 'records' not in data or 'data' not in data['records']:
         return {'underlying': None, 'pcr_total': None, 'pcr_near': None, 'expiry': None}
@@ -101,10 +105,24 @@ def compute_oi_pcr_and_underlying(data):
         'expiry': current_expiry
     }
 
+def calculate_pivot_points(high, low, close):
+    """
+    Calculates Pivot Point, Support, and Resistance levels using the standard formula.
+    (Standard formula ka upyog karke Pivot Point, Support aur Resistance levels ki ganna karta hai.)
+    """
+    pivot = (high + low + close) / 3
+    r1 = (2 * pivot) - low
+    s1 = (2 * pivot) - high
+    r2 = pivot + (high - low)
+    s2 = pivot - (high - low)
+    
+    return {'PP': pivot, 'R1': r1, 'R2': r2, 'S1': s1, 'S2': s2}
+
 # --- Strategy and UI Functions ---
 def determine_signal(pcr, trend, ema_signal):
     """
     Based on PCR, trend and EMA signal, determines the final trading signal.
+    (PCR, trend aur EMA signal ke aadhar par final trading signal nirdharit karta hai.)
     """
     signal = "SIDEWAYS"
     suggested_option = None
@@ -123,6 +141,7 @@ def determine_signal(pcr, trend, ema_signal):
 def get_vix_label(vix_value):
     """
     Returns a volatility label and advice based on the VIX value.
+    (VIX value ke aadhar par volatility label aur salah deta hai.)
     """
     if vix_value is None:
         return {"value": 0, "label": "Not Available", "advice": "Volatility data is not available."}
@@ -135,7 +154,8 @@ def get_vix_label(vix_value):
 
 def display_dashboard(symbol, info):
     """
-    Displays the dashboard for a given symbol.
+    Displays the dashboard for a given symbol, including S&R levels.
+    (Diye gaye symbol ke liye dashboard display karta hai, jismein S&R levels shamil hain.)
     """
     st.subheader(f"{symbol} Dashboard")
     st.divider()
@@ -149,15 +169,39 @@ def display_dashboard(symbol, info):
         st.metric("Trend", info["trend"])
 
     st.markdown("---")
+    
     st.subheader("Strategy Signal")
     
     if info['signal'] == "BUY":
         st.success(f"Signal: BUY CE - ATM Option: ₹{round(info['underlying']/100)*100} CE")
     elif info['signal'] == "SELL":
         st.error(f"Signal: SELL PE - ATM Option: ₹{round(info['underlying']/100)*100} PE")
+    elif info['signal'] == "BREACH_UP":
+        st.success(f"Signal: RESISTANCE BREACH - Market is likely to move higher.")
+    elif info['signal'] == "BREACH_DOWN":
+        st.error(f"Signal: SUPPORT BREACH - Market is likely to move lower.")
     else:
         st.info("Signal: SIDEWAYS - No strong signal found.")
         
+    st.markdown("---")
+
+    st.subheader("Support & Resistance Levels")
+    pivot_levels = info.get('pivot_levels')
+    if pivot_levels:
+        sr_cols = st.columns(5)
+        with sr_cols[0]:
+            st.metric("R2", f"₹{pivot_levels['R2']:.2f}")
+        with sr_cols[1]:
+            st.metric("R1", f"₹{pivot_levels['R1']:.2f}")
+        with sr_cols[2]:
+            st.metric("PP", f"₹{pivot_levels['PP']:.2f}")
+        with sr_cols[3]:
+            st.metric("S1", f"₹{pivot_levels['S1']:.2f}")
+        with sr_cols[4]:
+            st.metric("S2", f"₹{pivot_levels['S2']:.2f}")
+    else:
+        st.info("S&R levels not available. Please wait for the next data fetch.")
+    
     st.divider()
     
     st.write(f"Last Updated: {info['last_update']}")
@@ -165,13 +209,14 @@ def display_dashboard(symbol, info):
 def display_simulated_sms(phone_number, message_type, trade_details):
     """
     Displays a simulated SMS message in the Streamlit app.
+    (Streamlit app mein ek simulated SMS message display karta hai.)
     """
     if not phone_number:
         return
 
     full_message = f"Number: {phone_number}\n"
     if message_type == "entry":
-        full_message += f"New Trade: {trade_details['Symbol']} with a {trade_details['Signal']} signal. Entry Price: ₹{trade_details['Entry Price']:.2f}"
+        full_message += f"New Trade: {trade_details['Symbol']} with a {trade_details['Signal']} signal. Trigger: {trade_details['Trigger']}. Entry Price: ₹{trade_details['Entry Price']:.2f}"
     elif message_type == "exit":
         full_message += f"Trade Closed: {trade_details['Symbol']} trade has been closed. Exit Price: ₹{trade_details['Current Price']:.2f}. P&L: ₹{trade_details['Final P&L']:.2f}"
     
@@ -182,6 +227,7 @@ def display_simulated_sms(phone_number, message_type, trade_details):
 def main():
     """
     Main function to run the Streamlit app.
+    (Streamlit app chalane ke liye main function.)
     """
     st.set_page_config(
         page_title="NSE Auto Paper Trading App",
@@ -209,6 +255,10 @@ def main():
     
     # --- Sidebar mein user inputs ke liye UI ---
     st.sidebar.header("Settings")
+    
+    # ON/OFF toggle button
+    paper_trading_on = st.sidebar.toggle("Paper Trading ON/OFF", value=False, help="Toggle on to start automatic data refresh and paper trading.")
+    
     phone_number = st.sidebar.text_input("Apna Phone Number Dalein", help="Yeh sirf ek simulation hai. Koi asli SMS nahi bheja jayega.")
 
     ema_signal_choice = st.sidebar.radio(
@@ -224,7 +274,7 @@ def main():
     lot_size = st.sidebar.number_input("Lot Size", min_value=1, value=1, step=1)
     
     # --- Data Fetching aur Display Logic (Auto-Refresh) ---
-    if time.time() - st.session_state.last_update_time > 60:
+    if paper_trading_on and (time.time() - st.session_state.last_update_time > 60):
         try:
             with st.spinner("NIFTY aur BANKNIFTY ke liye live data fetch kar rahe hain..."):
                 # Dono symbols ke liye data ek saath fetch karein
@@ -240,6 +290,13 @@ def main():
                 trend_nifty = "BULLISH" if pcr_used_nifty >= 1 else "BEARISH"
                 signal_nifty, suggested_side_nifty = determine_signal(pcr_used_nifty, trend_nifty, ema_signal_choice)
                 
+                # Pivot levels ki ganna karein (calculate pivot levels)
+                # Note: This is a placeholder as OHLC data is not directly available from the API.
+                # In a real-world scenario, you would fetch OHLC data for the day.
+                # For this example, we use a mock OHLC to show the S&R functionality.
+                mock_ohlc_nifty = {'high': nifty_info['underlying'] + 50, 'low': nifty_info['underlying'] - 50, 'close': nifty_info['underlying']}
+                pivot_levels_nifty = calculate_pivot_points(mock_ohlc_nifty['high'], mock_ohlc_nifty['low'], mock_ohlc_nifty['close'])
+                
                 st.session_state.data_cache['NIFTY'] = {
                     'underlying': nifty_info['underlying'],
                     'pcr_total': nifty_info['pcr_total'],
@@ -248,7 +305,8 @@ def main():
                     'trend': trend_nifty,
                     'signal': signal_nifty,
                     'suggested_side': suggested_side_nifty,
-                    'vix_data': vix_data
+                    'vix_data': vix_data,
+                    'pivot_levels': pivot_levels_nifty
                 }
                 
                 # BANKNIFTY data ko process karein
@@ -256,6 +314,9 @@ def main():
                 pcr_used_banknifty = banknifty_info['pcr_near'] if use_near_pcr else banknifty_info['pcr_total']
                 trend_banknifty = "BULLISH" if pcr_used_banknifty >= 1 else "BEARISH"
                 signal_banknifty, suggested_side_banknifty = determine_signal(pcr_used_banknifty, trend_banknifty, ema_signal_choice)
+                
+                mock_ohlc_banknifty = {'high': banknifty_info['underlying'] + 100, 'low': banknifty_info['underlying'] - 100, 'close': banknifty_info['underlying']}
+                pivot_levels_banknifty = calculate_pivot_points(mock_ohlc_banknifty['high'], mock_ohlc_banknifty['low'], mock_ohlc_banknifty['close'])
                 
                 st.session_state.data_cache['BANKNIFTY'] = {
                     'underlying': banknifty_info['underlying'],
@@ -265,7 +326,8 @@ def main():
                     'trend': trend_banknifty,
                     'signal': signal_banknifty,
                     'suggested_side': suggested_side_banknifty,
-                    'vix_data': vix_data
+                    'vix_data': vix_data,
+                    'pivot_levels': pivot_levels_banknifty
                 }
 
                 st.session_state.last_update_time = time.time()
@@ -277,78 +339,104 @@ def main():
             st.session_state.data_cache['BANKNIFTY'] = None
     
     # --- Auto-Trading Logic (Entry and Exit) ---
-    for symbol_choice in ['NIFTY', 'BANKNIFTY']:
-        current_info = st.session_state.data_cache.get(symbol_choice)
-        
-        if current_info and current_info['signal'] != "SIDEWAYS":
+    if paper_trading_on:
+        for symbol_choice in ['NIFTY', 'BANKNIFTY']:
+            current_info = st.session_state.data_cache.get(symbol_choice)
+            
+            if not current_info:
+                continue
+
+            current_price = current_info['underlying']
+            
+            # Check for S&R breach
+            breach_signal = "SIDEWAYS"
+            if current_info['pivot_levels']:
+                if current_price > current_info['pivot_levels']['R1']:
+                    breach_signal = "BREACH_UP"
+                elif current_price < current_info['pivot_levels']['S1']:
+                    breach_signal = "BREACH_DOWN"
+
+            # Primary signal is from the strategy
+            primary_signal = current_info['signal']
+            
+            # Combine signals to decide entry/exit
+            final_signal = primary_signal
+            trade_trigger = "Strategy"
+            if primary_signal == "SIDEWAYS" and breach_signal != "SIDEWAYS":
+                final_signal = breach_signal
+                trade_trigger = "Breach"
+
             # Check for an active trade for this symbol
             active_trade = next((trade for trade in st.session_state.trade_log if trade['Symbol'] == symbol_choice and trade['Status'] == 'Active'), None)
             
-            if not active_trade:
-                # No active trade, so enter a new one based on the current signal
-                log_key = f"{symbol_choice}_{current_info['signal']}"
+            # Enter a new trade if there's no active one and a valid signal
+            if not active_trade and final_signal != "SIDEWAYS":
+                log_key = f"{symbol_choice}_{final_signal}_{current_info['last_update']}"
                 if st.session_state.last_logged_signal.get(log_key) != current_info['last_update']:
                     
                     log_entry = {
                         "Timestamp": current_info['last_update'],
                         "Symbol": symbol_choice,
-                        "Signal": current_info['signal'],
-                        "Suggested Option": f"₹{round(current_info['underlying']/100)*100} {current_info['suggested_side']}",
-                        "Entry Price": current_info['underlying'],
+                        "Signal": final_signal,
+                        "Suggested Option": f"₹{round(current_price/100)*100} {'CE' if final_signal == 'BUY' or final_signal == 'BREACH_UP' else 'PE'}",
+                        "Entry Price": current_price,
                         "Exit Time": "-",
-                        "Current Price": current_info['underlying'],
+                        "Current Price": current_price,
                         "P&L": 0.0,
                         "Final P&L": "-",
                         "Used PCR": f"{current_info['pcr_total']:.2f}" if not use_near_pcr else f"{current_info['pcr_near']:.2f}",
                         "Lot Size": lot_size,
-                        "Status": "Active"
+                        "Status": "Active",
+                        "Trigger": trade_trigger
                     }
                     st.session_state.trade_log.append(log_entry)
                     st.session_state.last_logged_signal[log_key] = current_info['last_update']
                     
                     display_simulated_sms(phone_number, "entry", log_entry)
 
-    # Check for trade exits based on signal changes
-    for entry in st.session_state.trade_log:
-        if entry['Status'] == "Active":
-            current_symbol = entry['Symbol']
-            current_info = st.session_state.data_cache.get(current_symbol)
-            
-            if not current_info:
-                continue
+        # Check for trade exits based on signal changes
+        for entry in list(st.session_state.trade_log):
+            if entry['Status'] == "Active":
+                current_symbol = entry['Symbol']
+                current_info = st.session_state.data_cache.get(current_symbol)
+                
+                if not current_info:
+                    continue
 
-            current_signal = current_info['signal']
-            entry_signal = entry['Signal']
-            
-            # Exit conditions
-            is_exit_signal = (current_signal == "SIDEWAYS") or \
-                             (current_signal == "SELL" and entry_signal == "BUY") or \
-                             (current_signal == "BUY" and entry_signal == "SELL")
-            
-            if is_exit_signal:
-                current_price = current_info['underlying']
-                entry['Status'] = "Closed"
-                entry['Exit Time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                entry['Current Price'] = current_price
+                current_signal = current_info['signal']
+                entry_signal = entry['Signal']
                 
-                if entry_signal == "BUY":
-                    pnl_calc = (current_price - entry['Entry Price']) * entry['Lot Size']
-                else: # entry_signal == "SELL"
-                    pnl_calc = (entry['Entry Price'] - current_price) * entry['Lot Size']
+                # Exit conditions
+                is_exit_signal = (current_signal == "SIDEWAYS") or \
+                                 (current_signal == "SELL" and entry_signal == "BUY") or \
+                                 (current_signal == "BUY" and entry_signal == "SELL") or \
+                                 (current_signal == "BREACH_UP" and entry_signal == "BREACH_DOWN") or \
+                                 (current_signal == "BREACH_DOWN" and entry_signal == "BREACH_UP")
                 
-                entry['P&L'] = 0.0 # Live P&L is now 0
-                entry['Final P&L'] = pnl_calc
-                st.success(f"{entry['Symbol']} ke liye trade auto-exit ho gaya hai. Final P&L: ₹{pnl_calc:.2f}")
-                display_simulated_sms(phone_number, "exit", entry)
-            else:
-                # Update live P&L for active trades
-                current_price = current_info['underlying']
-                if entry_signal == "BUY":
-                    pnl_live = (current_price - entry['Entry Price']) * entry['Lot Size']
+                if is_exit_signal:
+                    current_price = current_info['underlying']
+                    entry['Status'] = "Closed"
+                    entry['Exit Time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    entry['Current Price'] = current_price
+                    
+                    if entry_signal in ["BUY", "BREACH_UP"]:
+                        pnl_calc = (current_price - entry['Entry Price']) * entry['Lot Size']
+                    else: # entry_signal in ["SELL", "BREACH_DOWN"]
+                        pnl_calc = (entry['Entry Price'] - current_price) * entry['Lot Size']
+                    
+                    entry['P&L'] = 0.0
+                    entry['Final P&L'] = pnl_calc
+                    st.success(f"{entry['Symbol']} ke liye trade auto-exit ho gaya hai. Final P&L: ₹{pnl_calc:.2f}")
+                    display_simulated_sms(phone_number, "exit", entry)
                 else:
-                    pnl_live = (entry['Entry Price'] - current_price) * entry['Lot Size']
-                entry['Current Price'] = current_price
-                entry['P&L'] = pnl_live
+                    # Update live P&L for active trades
+                    current_price = current_info['underlying']
+                    if entry_signal in ["BUY", "BREACH_UP"]:
+                        pnl_live = (current_price - entry['Entry Price']) * entry['Lot Size']
+                    else:
+                        pnl_live = (entry['Entry Price'] - current_price) * entry['Lot Size']
+                    entry['Current Price'] = current_price
+                    entry['P&L'] = pnl_live
     
     # --- Dashboards side-by-side display karein ---
     col_nifty, col_banknifty = st.columns(2)
@@ -358,14 +446,14 @@ def main():
             info = st.session_state.data_cache['NIFTY']
             display_dashboard('NIFTY', info)
         else:
-            st.info("NIFTY data uplabdh nahi hai. Thodi der mein automatic refresh hoga.")
+            st.info("NIFTY data uplabdh nahi hai. Kripya toggle ON karein.")
     
     with col_banknifty:
         if st.session_state.data_cache['BANKNIFTY']:
             info = st.session_state.data_cache['BANKNIFTY']
             display_dashboard('BANKNIFTY', info)
         else:
-            st.info("BANKNIFTY data uplabdh nahi hai. Thodi der mein automatic refresh hoga.")
+            st.info("BANKNIFTY data uplabdh nahi hai. Kripya toggle ON karein.")
     
     st.subheader("India VIX")
     vix_data = get_vix_label(st.session_state.data_cache['NIFTY']['vix_data']['value'] if st.session_state.data_cache['NIFTY'] else None)
