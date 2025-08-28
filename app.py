@@ -94,16 +94,52 @@ def display_dashboard(symbol, info):
     """
     Displays the dashboard for a given symbol.
     """
+    # Use HTML to replicate the local UI design
+    st.markdown("""
+        <style>
+            .main-container {
+                padding: 2rem;
+                border-radius: 0.75rem;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .card {
+                background-color: #e5e7eb; /* Corresponds to gray-200 */
+                padding: 1rem;
+                border-radius: 0.5rem;
+                text-align: center;
+            }
+            .blue-card {
+                background-color: #dbeafe; /* Corresponds to blue-100 */
+            }
+            .signal-card {
+                background-color: #f9fafb; /* Corresponds to gray-50 */
+                padding: 1.5rem;
+                border-radius: 0.5rem;
+                text-align: center;
+            }
+            .signal-text {
+                font-size: 1.5rem;
+                font-weight: bold;
+            }
+            .green-text { color: #22c55e; } /* green-500 */
+            .red-text { color: #ef4444; } /* red-500 */
+            .yellow-text { color: #eab308; } /* yellow-500 */
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Main container
+    st.markdown('<div class="main-container">', unsafe_allow_html=True)
+    
     st.header(f"{symbol} Live Analysis")
     st.divider()
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Live Price", f"₹ {info['underlying']:.2f}")
+        st.markdown(f'<div class="card blue-card">Live Price<div style="font-size:1.5rem; font-weight: bold;">₹ {info["underlying"]:.2f}</div></div>', unsafe_allow_html=True)
     with col2:
-        st.metric("Total PCR", f"{info['pcr_total']:.2f}")
+        st.markdown(f'<div class="card">Total PCR<div style="font-size:1.5rem; font-weight: bold;">{info["pcr_total"]:.2f}</div></div>', unsafe_allow_html=True)
     with col3:
-        st.metric("Near PCR", f"{info['pcr_near']:.2f}")
+        st.markdown(f'<div class="card">Near PCR<div style="font-size:1.5rem; font-weight: bold;">{info["pcr_near"]:.2f}</div></div>', unsafe_allow_html=True)
 
     st.subheader("Strategy Signal")
     
@@ -138,6 +174,8 @@ def display_dashboard(symbol, info):
     st.write("Data source: NSE India")
     st.warning("Disclaimer: This is for educational purposes only. Do not use for live trading.")
 
+    st.markdown('</div>', unsafe_allow_html=True)
+
 def main():
     """
     Main function to run the Streamlit app.
@@ -152,10 +190,6 @@ def main():
     st.title("NSE Option Chain Analysis Dashboard")
     st.markdown("This dashboard provides live analysis of NIFTY and BANKNIFTY based on a custom trading strategy.")
 
-    # Streamlit will re-run this script whenever a user interacts with a widget.
-    # We will use st.button to explicitly trigger a refresh.
-    
-    # Create an empty placeholder to hold the dashboard content
     dashboard_placeholder = st.empty()
 
     symbol_choice = st.sidebar.radio(
@@ -167,7 +201,6 @@ def main():
     if st.sidebar.button("Refresh Data"):
         st.session_state.force_refresh = True
         
-    # Check if a refresh is requested or if it's the first run
     if "force_refresh" not in st.session_state or st.session_state.force_refresh:
         try:
             with st.spinner(f"Fetching live data for {symbol_choice}... Please wait."):
@@ -179,13 +212,12 @@ def main():
             with dashboard_placeholder.container():
                 display_dashboard(symbol_choice, info)
             
-            # Reset the refresh state
             st.session_state.force_refresh = False
 
         except Exception as e:
             st.error(f"Error fetching data for {symbol_choice}: {e}")
             st.info("Please click 'Refresh Data' to try again.")
-            st.session_state.force_refresh = False # Reset the refresh state
+            st.session_state.force_refresh = False
 
 if __name__ == "__main__":
     main()
