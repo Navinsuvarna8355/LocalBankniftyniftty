@@ -141,7 +141,7 @@ def get_vix_label(vix_value):
     else:
         return {"value": vix_value, "label": "High Volatility", "advice": "The market has very high volatility. Trade with great caution or avoid trading."}
 
-def display_dashboard(symbol, info, signal, suggested_side, vix_data):
+def display_dashboard(symbol, info, vix_data):
     """
     Displays the dashboard for a given symbol, including the trade log feature and VIX.
     """
@@ -204,9 +204,9 @@ def display_dashboard(symbol, info, signal, suggested_side, vix_data):
     st.subheader("Strategy Signal")
     
     # Show explicit buy/sell action on CE/PE
-    if signal == "BUY":
+    if info['signal'] == "BUY":
         st.success(f"Signal: BUY CE - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} CE")
-    elif signal == "SELL":
+    elif info['signal'] == "SELL":
         st.error(f"Signal: SELL PE - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} PE")
     else:
         st.info("Signal: SIDEWAYS - No strong signal found.")
@@ -287,43 +287,53 @@ def main():
 
     # --- Data Fetching and Display Logic ---
     
-    # Fetch data only if refresh button is clicked or if data is not yet available
-    if refresh_button or (symbol_choice == 'NIFTY' and st.session_state.nifty_data is None) or \
-       (symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data is None):
+    # Fetch data for both symbols if they are not yet available or on refresh
+    if refresh_button or (st.session_state.nifty_data is None and st.session_state.banknifty_data is None):
         try:
-            with st.spinner(f"Fetching live data for {symbol_choice}... Please wait."):
-                data = fetch_option_chain_from_api(symbol_choice)
-                info = compute_oi_pcr_and_underlying(data)
+            with st.spinner(f"Fetching live data for NIFTY and BANKNIFTY..."):
+                nifty_data = fetch_option_chain_from_api('NIFTY')
+                nifty_info = compute_oi_pcr_and_underlying(nifty_data)
+                
+                banknifty_data = fetch_option_chain_from_api('BANKNIFTY')
+                banknifty_info = compute_oi_pcr_and_underlying(banknifty_data)
+                
                 vix_value = fetch_vix_data()
-            
-            vix_data = get_vix_label(vix_value)
-            pcr_used = info['pcr_near'] if use_near_pcr else info['pcr_total']
-            trend = "BULLISH" if pcr_used >= 1 else "BEARISH"
-            signal, suggested_side = determine_signal(pcr_used, trend, ema_signal_choice)
-            
-            # Store calculated info in session state
-            current_data = {
-                'underlying': info['underlying'],
-                'pcr_total': info['pcr_total'],
-                'pcr_near': info['pcr_near'],
-                'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'use_near_pcr': use_near_pcr,
-                'pcr_used': pcr_used,
-                'trend': trend,
-                'ema_signal': ema_signal_choice,
-                'signal': signal,
-                'suggested_side': suggested_side,
-                'lot_size': lot_size,
-                'vix_data': vix_data
-            }
-
-            if symbol_choice == 'NIFTY':
-                st.session_state.nifty_data = current_data
-            elif symbol_choice == 'BANKNIFTY':
-                st.session_state.banknifty_data = current_data
+                vix_data = get_vix_label(vix_value)
+                
+                # Process NIFTY data
+                pcr_used_nifty = nifty_info['pcr_near'] if use_near_pcr else nifty_info['pcr_total']
+                trend_nifty = "BULLISH" if pcr_used_nifty >= 1 else "BEARISH"
+                signal_nifty, suggested_side_nifty = determine_signal(pcr_used_nifty, trend_nifty, ema_signal_choice)
+                
+                st.session_state.nifty_data = {
+                    'underlying': nifty_info['underlying'],
+                    'pcr_total': nifty_info['pcr_total'],
+                    'pcr_near': nifty_info['pcr_near'],
+                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'trend': trend_nifty,
+                    'signal': signal_nifty,
+                    'suggested_side': suggested_side_nifty,
+                    'vix_data': vix_data
+                }
+                
+                # Process BANKNIFTY data
+                pcr_used_banknifty = banknifty_info['pcr_near'] if use_near_pcr else banknifty_info['pcr_total']
+                trend_banknifty = "BULLISH" if pcr_used_banknifty >= 1 else "BEARISH"
+                signal_banknifty, suggested_side_banknifty = determine_signal(pcr_used_banknifty, trend_banknifty, ema_signal_choice)
+                
+                st.session_state.banknifty_data = {
+                    'underlying': banknifty_info['underlying'],
+                    'pcr_total': banknifty_info['pcr_total'],
+                    'pcr_near': banknifty_info['pcr_near'],
+                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'trend': trend_banknifty,
+                    'signal': signal_banknifty,
+                    'suggested_side': suggested_side_banknifty,
+                    'vix_data': vix_data
+                }
             
         except Exception as e:
-            st.error(f"Error fetching data for {symbol_choice}: {e}")
+            st.error(f"Error fetching data: {e}")
             st.info("Please click 'Refresh Data' to try again.")
 
     # --- Auto-Log and P&L Update Logic ---
@@ -339,7 +349,7 @@ def main():
             
             log_entry = {
                 "Timestamp": current_info['last_update'],
-                "Symbol": current_info['Symbol'],
+                "Symbol": symbol_choice,
                 "Signal": current_info['signal'],
                 "Suggested Option": f"₹{round(current_info['underlying']/100)*100} {current_info['suggested_side']}",
                 "Entry Price": current_info['underlying'],
@@ -347,7 +357,7 @@ def main():
                 "Current Price": current_info['underlying'],
                 "P&L": 0.0,
                 "Final P&L": "-",
-                "Used PCR": f"{current_info['pcr_used']:.2f}",
+                "Used PCR": f"{current_info['pcr_total']:.2f}" if not use_near_pcr else f"{current_info['pcr_near']:.2f}",
                 "Lot Size": lot_size,
                 "Status": "Active"
             }
@@ -408,10 +418,10 @@ def main():
 
     if symbol_choice == 'NIFTY' and st.session_state.nifty_data:
         info = st.session_state.nifty_data
-        display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'], info['vix_data'])
+        display_dashboard(symbol_choice, info, info['vix_data'])
     elif symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data:
         info = st.session_state.banknifty_data
-        display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'], info['vix_data'])
+        display_dashboard(symbol_choice, info, info['vix_data'])
     else:
         st.info("Please select a symbol and click 'Refresh Data' to view the dashboard.")
     
