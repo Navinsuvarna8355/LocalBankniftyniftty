@@ -105,18 +105,37 @@ def compute_oi_pcr_and_underlying(data):
         'expiry': current_expiry
     }
 
-def calculate_pivot_points(high, low, close):
+def find_oi_based_sr_levels(data):
     """
-    Calculates Pivot Point, Support, and Resistance levels using the standard formula.
-    (Standard formula ka upyog karke Pivot Point, Support aur Resistance levels ki ganna karta hai.)
+    Finds Support and Resistance levels based on highest Open Interest in the near expiry.
+    (Near expiry mein sabse zyada Open Interest ke aadhar par Support aur Resistance levels dhoondhta hai.)
     """
-    pivot = (high + low + close) / 3
-    r1 = (2 * pivot) - low
-    s1 = (2 * pivot) - high
-    r2 = pivot + (high - low)
-    s2 = pivot - (high - low)
+    if not data or 'records' not in data or 'data' not in data['records']:
+        return {'resistance': None, 'support': None}
+        
+    current_expiry = data['records']['expiryDates'][0]
     
-    return {'PP': pivot, 'R1': r1, 'R2': r2, 'S1': s1, 'S2': s2}
+    max_ce_oi = 0
+    resistance_level = None
+    
+    max_pe_oi = 0
+    support_level = None
+    
+    for item in data['records']['data']:
+        if item.get('expiryDate') == current_expiry:
+            # Check for Resistance (highest Call OI)
+            ce_oi = item.get('CE', {}).get('openInterest', 0)
+            if ce_oi > max_ce_oi:
+                max_ce_oi = ce_oi
+                resistance_level = item.get('strikePrice')
+            
+            # Check for Support (highest Put OI)
+            pe_oi = item.get('PE', {}).get('openInterest', 0)
+            if pe_oi > max_pe_oi:
+                max_pe_oi = pe_oi
+                support_level = item.get('strikePrice')
+                
+    return {'resistance': resistance_level, 'support': support_level}
 
 # --- Strategy and UI Functions ---
 def determine_signal(pcr, trend, ema_signal):
@@ -154,8 +173,8 @@ def get_vix_label(vix_value):
 
 def display_dashboard(symbol, info):
     """
-    Displays the dashboard for a given symbol, including S&R levels.
-    (Diye gaye symbol ke liye dashboard display karta hai, jismein S&R levels shamil hain.)
+    Displays the dashboard for a given symbol, including OI-based S&R levels.
+    (Diye gaye symbol ke liye dashboard display karta hai, jismein OI-based S&R levels shamil hain.)
     """
     st.subheader(f"{symbol} Dashboard")
     st.divider()
@@ -185,20 +204,14 @@ def display_dashboard(symbol, info):
         
     st.markdown("---")
 
-    st.subheader("Support & Resistance Levels")
-    pivot_levels = info.get('pivot_levels')
-    if pivot_levels:
-        sr_cols = st.columns(5)
+    st.subheader("OI-Based Support & Resistance")
+    oi_levels = info.get('oi_levels')
+    if oi_levels and oi_levels['resistance'] and oi_levels['support']:
+        sr_cols = st.columns(2)
         with sr_cols[0]:
-            st.metric("R2", f"₹{pivot_levels['R2']:.2f}")
+            st.metric("Resistance", f"₹ {oi_levels['resistance']:.2f}")
         with sr_cols[1]:
-            st.metric("R1", f"₹{pivot_levels['R1']:.2f}")
-        with sr_cols[2]:
-            st.metric("PP", f"₹{pivot_levels['PP']:.2f}")
-        with sr_cols[3]:
-            st.metric("S1", f"₹{pivot_levels['S1']:.2f}")
-        with sr_cols[4]:
-            st.metric("S2", f"₹{pivot_levels['S2']:.2f}")
+            st.metric("Support", f"₹ {oi_levels['support']:.2f}")
     else:
         st.info("S&R levels not available. Please wait for the next data fetch.")
     
@@ -290,12 +303,8 @@ def main():
                 trend_nifty = "BULLISH" if pcr_used_nifty >= 1 else "BEARISH"
                 signal_nifty, suggested_side_nifty = determine_signal(pcr_used_nifty, trend_nifty, ema_signal_choice)
                 
-                # Pivot levels ki ganna karein (calculate pivot levels)
-                # Note: This is a placeholder as OHLC data is not directly available from the API.
-                # In a real-world scenario, you would fetch OHLC data for the day.
-                # For this example, we use a mock OHLC to show the S&R functionality.
-                mock_ohlc_nifty = {'high': nifty_info['underlying'] + 50, 'low': nifty_info['underlying'] - 50, 'close': nifty_info['underlying']}
-                pivot_levels_nifty = calculate_pivot_points(mock_ohlc_nifty['high'], mock_ohlc_nifty['low'], mock_ohlc_nifty['close'])
+                # OI-based S&R levels ki ganna karein
+                oi_levels_nifty = find_oi_based_sr_levels(nifty_raw_data)
                 
                 st.session_state.data_cache['NIFTY'] = {
                     'underlying': nifty_info['underlying'],
@@ -306,7 +315,7 @@ def main():
                     'signal': signal_nifty,
                     'suggested_side': suggested_side_nifty,
                     'vix_data': vix_data,
-                    'pivot_levels': pivot_levels_nifty
+                    'oi_levels': oi_levels_nifty
                 }
                 
                 # BANKNIFTY data ko process karein
@@ -315,8 +324,8 @@ def main():
                 trend_banknifty = "BULLISH" if pcr_used_banknifty >= 1 else "BEARISH"
                 signal_banknifty, suggested_side_banknifty = determine_signal(pcr_used_banknifty, trend_banknifty, ema_signal_choice)
                 
-                mock_ohlc_banknifty = {'high': banknifty_info['underlying'] + 100, 'low': banknifty_info['underlying'] - 100, 'close': banknifty_info['underlying']}
-                pivot_levels_banknifty = calculate_pivot_points(mock_ohlc_banknifty['high'], mock_ohlc_banknifty['low'], mock_ohlc_banknifty['close'])
+                # OI-based S&R levels ki ganna karein
+                oi_levels_banknifty = find_oi_based_sr_levels(banknifty_raw_data)
                 
                 st.session_state.data_cache['BANKNIFTY'] = {
                     'underlying': banknifty_info['underlying'],
@@ -327,7 +336,7 @@ def main():
                     'signal': signal_banknifty,
                     'suggested_side': suggested_side_banknifty,
                     'vix_data': vix_data,
-                    'pivot_levels': pivot_levels_banknifty
+                    'oi_levels': oi_levels_banknifty
                 }
 
                 st.session_state.last_update_time = time.time()
@@ -350,10 +359,10 @@ def main():
             
             # Check for S&R breach
             breach_signal = "SIDEWAYS"
-            if current_info['pivot_levels']:
-                if current_price > current_info['pivot_levels']['R1']:
+            if current_info['oi_levels'] and current_info['oi_levels']['resistance'] and current_info['oi_levels']['support']:
+                if current_price > current_info['oi_levels']['resistance']:
                     breach_signal = "BREACH_UP"
-                elif current_price < current_info['pivot_levels']['S1']:
+                elif current_price < current_info['oi_levels']['support']:
                     breach_signal = "BREACH_DOWN"
 
             # Primary signal is from the strategy
@@ -410,9 +419,9 @@ def main():
                 is_exit_signal = (current_signal == "SIDEWAYS") or \
                                  (current_signal == "SELL" and entry_signal == "BUY") or \
                                  (current_signal == "BUY" and entry_signal == "SELL") or \
-                                 (current_signal == "BREACH_UP" and entry_signal == "BREACH_DOWN") or \
-                                 (current_signal == "BREACH_DOWN" and entry_signal == "BREACH_UP")
-                
+                                 (current_signal == "BREACH_UP" and entry_signal in ["BREACH_DOWN", "SELL"]) or \
+                                 (current_signal == "BREACH_DOWN" and entry_signal in ["BREACH_UP", "BUY"])
+
                 if is_exit_signal:
                     current_price = current_info['underlying']
                     entry['Status'] = "Closed"
@@ -464,7 +473,7 @@ def main():
         display_log = []
         for entry in st.session_state.trade_log:
             display_entry = entry.copy()
-            display_entry['P&L (Live/Final)'] = f"₹{display_entry['P&L']:.2f}" if display_entry['Status'] == 'Active' else f"₹{display_entry['Final P&L']:.2f}"
+            display_entry['P&L (Live/Final)'] = f"₹{display_entry['P&L']:.2f}" if entry['Status'] == 'Active' else f"₹{entry['Final P&L']:.2f}"
             display_log.append(display_entry)
         
         df_log = pd.DataFrame(display_log)
