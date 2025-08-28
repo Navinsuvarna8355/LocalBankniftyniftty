@@ -287,65 +287,65 @@ def main():
     lot_size = st.sidebar.number_input("Lot Size", min_value=1, value=1, step=1)
     
     # --- Data Fetching aur Display Logic (Auto-Refresh) ---
-    if paper_trading_on:
-        if (time.time() - st.session_state.last_update_time > 60):
-            try:
-                with st.spinner("NIFTY aur BANKNIFTY ke liye live data fetch kar rahe hain..."):
-                    # Dono symbols ke liye data ek saath fetch karein
-                    nifty_raw_data = fetch_option_chain_from_api('NIFTY')
-                    banknifty_raw_data = fetch_option_chain_from_api('BANKNIFTY')
-                    
-                    vix_value = fetch_vix_data()
-                    vix_data = get_vix_label(vix_value)
-                    
-                    # NIFTY data ko process karein
-                    nifty_info = compute_oi_pcr_and_underlying(nifty_raw_data)
-                    pcr_used_nifty = nifty_info['pcr_near'] if use_near_pcr else nifty_info['pcr_total']
-                    trend_nifty = "BULLISH" if pcr_used_nifty >= 1 else "BEARISH"
-                    signal_nifty, suggested_side_nifty = determine_signal(pcr_used_nifty, trend_nifty, ema_signal_choice)
-                    
-                    # OI-based S&R levels ki ganna karein
-                    oi_levels_nifty = find_oi_based_sr_levels(nifty_raw_data)
-                    
-                    st.session_state.data_cache['NIFTY'] = {
-                        'underlying': nifty_info['underlying'],
-                        'pcr_total': nifty_info['pcr_total'],
-                        'pcr_near': nifty_info['pcr_near'],
-                        'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        'trend': trend_nifty,
-                        'signal': signal_nifty,
-                        'suggested_side': suggested_side_nifty,
-                        'vix_data': vix_data,
-                        'oi_levels': oi_levels_nifty
-                    }
-                    
-                    # BANKNIFTY data ko process karein
-                    banknifty_info = compute_oi_pcr_and_underlying(banknifty_raw_data)
-                    pcr_used_banknifty = banknifty_info['pcr_near'] if use_near_pcr else banknifty_info['pcr_total']
-                    trend_banknifty = "BULLISH" if pcr_used_banknifty >= 1 else "BEARISH"
-                    signal_banknifty, suggested_side_banknifty = determine_signal(pcr_used_banknifty, trend_banknifty, ema_signal_choice)
-                    
-                    # OI-based S&R levels ki ganna karein
-                    oi_levels_banknifty = find_oi_based_sr_levels(banknifty_raw_data)
-                    
-                    st.session_state.data_cache['BANKNIFTY'] = {
-                        'underlying': banknifty_info['underlying'],
-                        'pcr_total': banknifty_info['pcr_total'],
-                        'pcr_near': banknifty_info['pcr_near'],
-                        'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        'trend': trend_banknifty,
-                        'signal': signal_banknifty,
-                        'suggested_side': suggested_side_banknifty,
-                        'vix_data': vix_data,
-                        'oi_levels': oi_levels_banknifty
-                    }
-    
-                    st.session_state.last_update_time = time.time()
+    # Data hamesha fetch hoga, bhale hi paper trading ON ho ya OFF
+    if (time.time() - st.session_state.last_update_time > 60):
+        try:
+            with st.spinner("NIFTY aur BANKNIFTY ke liye live data fetch kar rahe hain..."):
+                # Dono symbols ke liye data ek saath fetch karein
+                nifty_raw_data = fetch_option_chain_from_api('NIFTY')
+                banknifty_raw_data = fetch_option_chain_from_api('BANKNIFTY')
                 
-            except Exception as e:
-                st.error(f"Data fetch karne mein galti: {e}")
-                st.session_state.data_cache['NIFTY'] = None
-                st.session_state.data_cache['BANKNIFTY'] = None
+                vix_value = fetch_vix_data()
+                vix_data = get_vix_label(vix_value)
+                
+                # NIFTY data ko process karein
+                nifty_info = compute_oi_pcr_and_underlying(nifty_raw_data)
+                pcr_used_nifty = nifty_info['pcr_near'] if use_near_pcr else nifty_info['pcr_total']
+                trend_nifty = "BULLISH" if pcr_used_nifty >= 1 else "BEARISH"
+                signal_nifty, suggested_side_nifty = determine_signal(pcr_used_nifty, trend_nifty, ema_signal_choice)
+                
+                # OI-based S&R levels ki ganna karein
+                oi_levels_nifty = find_oi_based_sr_levels(nifty_raw_data)
+                
+                st.session_state.data_cache['NIFTY'] = {
+                    'underlying': nifty_info['underlying'],
+                    'pcr_total': nifty_info['pcr_total'],
+                    'pcr_near': nifty_info['pcr_near'],
+                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'trend': trend_nifty,
+                    'signal': signal_nifty,
+                    'suggested_side': suggested_side_nifty,
+                    'vix_data': vix_data,
+                    'oi_levels': oi_levels_nifty
+                }
+                
+                # BANKNIFTY data ko process karein
+                banknifty_info = compute_oi_pcr_and_underlying(banknifty_raw_data)
+                pcr_used_banknifty = banknifty_info['pcr_near'] if use_near_pcr else banknifty_info['pcr_total']
+                trend_banknifty = "BULLISH" if pcr_used_banknifty >= 1 else "BEARISH"
+                signal_banknifty, suggested_side_banknifty = determine_signal(pcr_used_banknifty, trend_banknifty, ema_signal_choice)
+                
+                # OI-based S&R levels ki ganna karein
+                oi_levels_banknifty = find_oi_based_sr_levels(banknifty_raw_data)
+                
+                st.session_state.data_cache['BANKNIFTY'] = {
+                    'underlying': banknifty_info['underlying'],
+                    'pcr_total': banknifty_info['pcr_total'],
+                    'pcr_near': banknifty_info['pcr_near'],
+                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'trend': trend_banknifty,
+                    'signal': signal_banknifty,
+                    'suggested_side': suggested_side_banknifty,
+                    'vix_data': vix_data,
+                    'oi_levels': oi_levels_banknifty
+                }
+
+                st.session_state.last_update_time = time.time()
+            
+        except Exception as e:
+            st.error(f"Data fetch karne mein galti: {e}")
+            st.session_state.data_cache['NIFTY'] = None
+            st.session_state.data_cache['BANKNIFTY'] = None
     
     # --- Auto-Trading Logic (Entry and Exit) ---
     if paper_trading_on:
