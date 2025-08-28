@@ -7,7 +7,7 @@ import random
 app = Flask(__name__)
 CORS(app)
 
-# Simulated option chain fetcher (replace with real NSE API logic)
+# Simulated option chain fetcher (replace with real NSE logic)
 def fetch_option_chain(symbol):
     return {
         'underlying': random.uniform(24000, 55000),
@@ -16,7 +16,7 @@ def fetch_option_chain(symbol):
         'expiry': '28-Aug-2025'
     }
 
-# Strategy logic
+# Signal logic based on PCR + EMA
 def determine_signal(pcr, trend, ema_signal):
     if ema_signal == 'BUY' and trend == 'BULLISH':
         return 'BUY', 'CALL'
@@ -25,6 +25,7 @@ def determine_signal(pcr, trend, ema_signal):
     else:
         return 'SIDEWAYS', None
 
+# Shared state
 state = {
     'NIFTY': {'underlying': None, 'pcr_total': None, 'pcr_near': None, 'expiry': None, 'error': None},
     'BANKNIFTY': {'underlying': None, 'pcr_total': None, 'pcr_near': None, 'expiry': None, 'error': None},
@@ -33,6 +34,7 @@ state = {
 
 POLL_INTERVAL = 5  # seconds
 
+# Background polling thread
 def poller():
     while True:
         for symbol in ['NIFTY', 'BANKNIFTY']:
@@ -50,6 +52,7 @@ def poller():
 
 threading.Thread(target=poller, daemon=True).start()
 
+# Routes
 @app.route('/')
 def home():
     return jsonify({'message': 'StrategySignal backend running'})
@@ -103,4 +106,3 @@ def strategy():
 if __name__ == '__main__':
     print('✅ StrategySignal backend starting...')
     app.run(host='0.0.0.0', port=5000, debug=True)
-
