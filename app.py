@@ -176,14 +176,16 @@ def main():
     # Initialize session state for the trade log if it doesn't exist
     if 'trade_log' not in st.session_state:
         st.session_state.trade_log = []
-    
-    # UI for symbol and EMA signal selection in the sidebar
-    symbol_choice = st.sidebar.radio(
+
+    # UI for symbol selection on the main page
+    symbol_choice = st.radio(
         "Select Symbol",
         ["NIFTY", "BANKNIFTY"],
-        index=0
+        index=0,
+        horizontal=True
     )
-    
+
+    # UI for EMA signal selection in the sidebar
     ema_signal_choice = st.sidebar.radio(
         "Select EMA Signal",
         ["BUY", "SELL"],
