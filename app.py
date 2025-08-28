@@ -5,12 +5,13 @@ import datetime
 app = Flask(__name__)
 CORS(app)
 
-# Helper for IST timestamp
+# Helper: current IST time
 def ist_now():
     return datetime.datetime.utcnow().astimezone(
         datetime.timezone(datetime.timedelta(hours=5, minutes=30))
     ).strftime("%Y-%m-%d %H:%M:%S")
 
+# Root health check
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
@@ -19,6 +20,7 @@ def home():
         "timestamp": ist_now()
     })
 
+# NIFTY signal endpoint
 @app.route("/strategy/signal/NIFTY", methods=["GET"])
 def signal_nifty():
     return jsonify({
@@ -34,6 +36,7 @@ def signal_nifty():
         "timestamp": ist_now()
     })
 
+# BANKNIFTY signal endpoint
 @app.route("/strategy/signal/BANKNIFTY", methods=["GET"])
 def signal_banknifty():
     return jsonify({
@@ -50,4 +53,5 @@ def signal_banknifty():
     })
 
 if __name__ == "__main__":
+    # Local debug server (Streamli.io will use gunicorn via Procfile)
     app.run(host="0.0.0.0", port=5000)
