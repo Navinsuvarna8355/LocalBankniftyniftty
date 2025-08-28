@@ -1,4 +1,4 @@
-# streamlit_app.py
+# new_app.py
 import streamlit as st
 import time
 import pandas as pd
@@ -7,8 +7,10 @@ import json
 import requests
 import logging
 
-# --- Web Scraping and Calculation Functions (Included for a single-file deployment) ---
-# NOTE: In a multi-file setup, these would be in nse_option_chain.py
+# Set up logging to show debug information
+logging.basicConfig(level=logging.INFO)
+
+# --- Web Scraping and Calculation Functions ---
 def fetch_option_chain(symbol='BANKNIFTY'):
     """
     Fetches live option chain data from NSE with improved headers and session management.
@@ -28,11 +30,13 @@ def fetch_option_chain(symbol='BANKNIFTY'):
     
     try:
         logging.info(f"Fetching cookies from NSE...")
+        # First request to get cookies
         session.get("https://www.nseindia.com", timeout=10)
         
         logging.info(f"Fetching option chain for {symbol}...")
+        # Second request to fetch the option chain data
         response = session.get(url, timeout=10)
-        response.raise_for_status()
+        response.raise_for_status()  # Raise an exception for bad status codes
         
         logging.info("Data fetched successfully.")
         return response.json()
@@ -64,6 +68,7 @@ def compute_oi_pcr_and_underlying(data):
         pe_total_oi += item.get('PE', {}).get('openInterest', 0)
         ce_total_oi += item.get('CE', {}).get('openInterest', 0)
         
+        # Check for near expiry data
         if item.get('expiryDate') == current_expiry:
             pe_near_oi += item.get('PE', {}).get('openInterest', 0)
             ce_near_oi += item.get('CE', {}).get('openInterest', 0)
@@ -78,7 +83,7 @@ def compute_oi_pcr_and_underlying(data):
         'expiry': current_expiry
     }
 
-# Function to determine the signal
+# --- Strategy and UI Functions ---
 def determine_signal(pcr, trend, ema_signal):
     """
     Based on PCR, trend and EMA signal, determines the final trading signal.
