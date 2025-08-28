@@ -7,9 +7,6 @@ import logging
 from datetime import datetime
 import time
 
-# Logging setup for debugging (debugging ke liye logging)
-logging.basicConfig(level=logging.INFO)
-
 # --- Data Fetching Functions ---
 def fetch_option_chain_from_api(symbol):
     """
@@ -455,14 +452,14 @@ def main():
             info = st.session_state.data_cache['NIFTY']
             display_dashboard('NIFTY', info)
         else:
-            st.info("NIFTY data uplabdh nahi hai. Kripya toggle ON karein.")
+            st.info("NIFTY data uplabdh nahi hai. Kripya app chalne dein.")
     
     with col_banknifty:
         if st.session_state.data_cache['BANKNIFTY']:
             info = st.session_state.data_cache['BANKNIFTY']
             display_dashboard('BANKNIFTY', info)
         else:
-            st.info("BANKNIFTY data uplabdh nahi hai. Kripya toggle ON karein.")
+            st.info("BANKNIFTY data uplabdh nahi hai. Kripya app chalne dein.")
     
     st.subheader("India VIX")
     vix_data = get_vix_label(st.session_state.data_cache['NIFTY']['vix_data']['value'] if st.session_state.data_cache['NIFTY'] else None)
@@ -485,3 +482,4 @@ def main():
     
 if __name__ == "__main__":
     main()
+
