@@ -1,48 +1,35 @@
 # app.py
 import streamlit as st
-import time
 import pandas as pd
 import math
-import json
 import requests
 import logging
 
 # Set up logging to show debug information
 logging.basicConfig(level=logging.INFO)
 
-# --- Web Scraping and Calculation Functions ---
-def fetch_option_chain(symbol='BANKNIFTY'):
+# --- Updated Data Fetching Function using a Public API ---
+def fetch_option_chain_from_api(symbol='BANKNIFTY'):
     """
-    Fetches live option chain data from NSE with improved headers and session management.
+    Fetches live option chain data from a third-party API.
     """
-    url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
+    api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     
     headers = {
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Upgrade-Insecure-Requests': '1',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
-        'X-Requested-With': 'XMLHttpRequest',
+        'Accept-Language': 'en-US,en;q=0.9',
     }
-    
-    session = requests.Session()
-    session.headers.update(headers)
-    
+
     try:
-        logging.info(f"Fetching cookies from NSE...")
-        # First request to get cookies
-        session.get("https://www.nseindia.com", timeout=10)
-        
-        logging.info(f"Fetching option chain for {symbol}...")
-        # Second request to fetch the option chain data
-        response = session.get(url, timeout=10)
-        response.raise_for_status()  # Raise an exception for bad status codes
-        
+        logging.info(f"Fetching data from third-party API for {symbol}...")
+        response = requests.get(api_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
         logging.info("Data fetched successfully.")
-        return response.json()
+        return data
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching data from NSE: {e}")
-        raise Exception(f"Failed to fetch data from NSE. Error: {e}")
+        logging.error(f"Error fetching data from API for {symbol}: {e}")
+        raise Exception(f"Failed to fetch data. Error: {e}")
 
 def compute_oi_pcr_and_underlying(data):
     """
@@ -175,7 +162,7 @@ def main():
     while True:
         try:
             with st.spinner(f"Fetching live data for {symbol_choice}... Please wait."):
-                data = fetch_option_chain(symbol_choice)
+                data = fetch_option_chain_from_api(symbol_choice)
                 info = compute_oi_pcr_and_underlying(data)
             
             info['last_update'] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
