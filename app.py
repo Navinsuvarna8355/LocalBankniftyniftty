@@ -1,31 +1,55 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
-import requests  # optional use for API calls
+import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-# Health check endpoint
+# Helper to get current IST timestamp string
+def ist_now():
+    return datetime.datetime.utcnow().astimezone(
+        datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+# Root health check
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
         "status": "ok",
-        "message": "LocalBankInfinity backend running 🚀"
+        "message": "LocalBankInfinity backend running 🚀",
+        "timestamp": ist_now()
     })
 
-# Example POST endpoint
-@app.route("/api/signal", methods=["POST"])
-def signal():
-    data = request.get_json(force=True) or {}
-    value = data.get("value", "no-data")
-    # Example if you need to call an external API:
-    # r = requests.get("https://api.example.com/data")
-    # external_data = r.json()
+# Strategy signal endpoints
+@app.route("/strategy/signal/NIFTY", methods=["GET"])
+def signal_nifty():
     return jsonify({
-        "input": value,
-        "processed": f"Signal processed for {value}"
+        "index": "NIFTY",
+        "signal": "SIDEWAYS",
+        "live_price": 19412.2,
+        "trend": "BEARISH",
+        "strategy": "EMA Crossover + PCR (option chain)",
+        "pcr_spot": 1.06,
+        "max_pain": 19400,
+        "pcr_oi": 1.04,
+        "expiry": "24-Aug-2023",
+        "timestamp": ist_now()
+    })
+
+@app.route("/strategy/signal/BANKNIFTY", methods=["GET"])
+def signal_banknifty():
+    return jsonify({
+        "index": "BANKNIFTY",
+        "signal": "SIDEWAYS",
+        "live_price": 44502.1,
+        "trend": "BEARISH",
+        "strategy": "EMA Crossover + PCR (option chain)",
+        "pcr_spot": 1.08,
+        "max_pain": 44500,
+        "pcr_oi": 1.06,
+        "expiry": "24-Aug-2023",
+        "timestamp": ist_now()
     })
 
 if __name__ == "__main__":
-    # Local dev server
     app.run(host="0.0.0.0", port=5000)
