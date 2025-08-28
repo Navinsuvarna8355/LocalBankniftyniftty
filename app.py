@@ -178,11 +178,12 @@ def main():
     # Initialize session state for the trade log and data
     if 'trade_log' not in st.session_state:
         st.session_state.trade_log = []
-    if 'data' not in st.session_state:
-        st.session_state.data = {
-            'NIFTY': None,
-            'BANKNIFTY': None,
-        }
+    # Initialize the data for both symbols to avoid fetch errors on first run
+    if 'nifty_data' not in st.session_state:
+        st.session_state.nifty_data = None
+    if 'banknifty_data' not in st.session_state:
+        st.session_state.banknifty_data = None
+
 
     # UI for EMA signal selection and other options in the sidebar
     ema_signal_choice = st.sidebar.radio(
@@ -211,45 +212,71 @@ def main():
 
     # --- Data Fetching and Display Logic ---
     
-    # Use a flag to trigger refresh
-    if refresh_button or 'force_refresh' not in st.session_state or st.session_state.force_refresh:
+    # Fetch data only if refresh button is clicked or if data is not yet available
+    if refresh_button or (symbol_choice == 'NIFTY' and st.session_state.nifty_data is None) or \
+       (symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data is None):
         try:
             with st.spinner(f"Fetching live data for {symbol_choice}... Please wait."):
                 data = fetch_option_chain_from_api(symbol_choice)
                 info = compute_oi_pcr_and_underlying(data)
             
             # Store calculated info in session state
-            st.session_state.data[symbol_choice] = {
-                'underlying': info['underlying'],
-                'pcr_total': info['pcr_total'],
-                'pcr_near': info['pcr_near'],
-                'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'use_near_pcr': use_near_pcr,
-                'pcr_used': info['pcr_near'] if use_near_pcr else info['pcr_total'],
-                'trend': "BULLISH" if (info['pcr_near'] if use_near_pcr else info['pcr_total']) >= 1 else "BEARISH",
-                'ema_signal': ema_signal_choice
-            }
-            st.session_state.force_refresh = False
+            if symbol_choice == 'NIFTY':
+                st.session_state.nifty_data = {
+                    'underlying': info['underlying'],
+                    'pcr_total': info['pcr_total'],
+                    'pcr_near': info['pcr_near'],
+                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'use_near_pcr': use_near_pcr,
+                    'pcr_used': info['pcr_near'] if use_near_pcr else info['pcr_total'],
+                    'trend': "BULLISH" if (info['pcr_near'] if use_near_pcr else info['pcr_total']) >= 1 else "BEARISH",
+                    'ema_signal': ema_signal_choice
+                }
+            elif symbol_choice == 'BANKNIFTY':
+                st.session_state.banknifty_data = {
+                    'underlying': info['underlying'],
+                    'pcr_total': info['pcr_total'],
+                    'pcr_near': info['pcr_near'],
+                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'use_near_pcr': use_near_pcr,
+                    'pcr_used': info['pcr_near'] if use_near_pcr else info['pcr_total'],
+                    'trend': "BULLISH" if (info['pcr_near'] if use_near_pcr else info['pcr_total']) >= 1 else "BEARISH",
+                    'ema_signal': ema_signal_choice
+                }
 
         except Exception as e:
             st.error(f"Error fetching data for {symbol_choice}: {e}")
             st.info("Please click 'Refresh Data' to try again.")
-            st.session_state.force_refresh = False
 
     # Display the dashboard based on the selected symbol
-    if st.session_state.data[symbol_choice]:
-        info = st.session_state.data[symbol_choice]
+    if symbol_choice == 'NIFTY' and st.session_state.nifty_data:
+        info = st.session_state.nifty_data
         signal, suggested_side = determine_signal(
             info['pcr_used'],
             info['trend'],
             info['ema_signal']
         )
         display_dashboard(symbol_choice, info, signal, suggested_side)
+    elif symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data:
+        info = st.session_state.banknifty_data
+        signal, suggested_side = determine_signal(
+            info['pcr_used'],
+            info['trend'],
+            info['ema_signal']
+        )
+        display_dashboard(symbol_choice, info, signal, suggested_side)
+    else:
+        st.info("Please select a symbol and click 'Refresh Data' to view the dashboard.")
     
     # --- Trade Logging Logic ---
     if log_button:
-        if st.session_state.data[symbol_choice]:
-            info = st.session_state.data[symbol_choice]
+        info = None
+        if symbol_choice == 'NIFTY' and st.session_state.nifty_data:
+            info = st.session_state.nifty_data
+        elif symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data:
+            info = st.session_state.banknifty_data
+
+        if info:
             signal, suggested_side = determine_signal(
                 info['pcr_used'],
                 info['trend'],
