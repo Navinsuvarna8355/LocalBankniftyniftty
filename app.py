@@ -4,6 +4,7 @@ import pandas as pd
 import math
 import requests
 import logging
+from datetime import datetime
 
 # Set up logging to show debug information
 logging.basicConfig(level=logging.INFO)
@@ -151,30 +152,40 @@ def main():
     st.title("NSE Option Chain Analysis Dashboard")
     st.markdown("This dashboard provides live analysis of NIFTY and BANKNIFTY based on a custom trading strategy.")
 
+    # Streamlit will re-run this script whenever a user interacts with a widget.
+    # We will use st.button to explicitly trigger a refresh.
+    
+    # Create an empty placeholder to hold the dashboard content
+    dashboard_placeholder = st.empty()
+
     symbol_choice = st.sidebar.radio(
         "Select Symbol",
         ["NIFTY", "BANKNIFTY"],
         index=0
     )
-    
-    dashboard_placeholder = st.empty()
 
-    while True:
+    if st.sidebar.button("Refresh Data"):
+        st.session_state.force_refresh = True
+        
+    # Check if a refresh is requested or if it's the first run
+    if "force_refresh" not in st.session_state or st.session_state.force_refresh:
         try:
             with st.spinner(f"Fetching live data for {symbol_choice}... Please wait."):
                 data = fetch_option_chain_from_api(symbol_choice)
                 info = compute_oi_pcr_and_underlying(data)
             
-            info['last_update'] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+            info['last_update'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             with dashboard_placeholder.container():
                 display_dashboard(symbol_choice, info)
+            
+            # Reset the refresh state
+            st.session_state.force_refresh = False
 
         except Exception as e:
             st.error(f"Error fetching data for {symbol_choice}: {e}")
-            st.info("Retrying in 5 seconds...")
-
-        time.sleep(5)
+            st.info("Please click 'Refresh Data' to try again.")
+            st.session_state.force_refresh = False # Reset the refresh state
 
 if __name__ == "__main__":
     main()
