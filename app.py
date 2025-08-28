@@ -253,7 +253,7 @@ def main():
     st.markdown("Yeh dashboard ek custom trading strategy ke aadhar par NIFTY aur BANKNIFTY ke liye **automatic paper trades** chalata hai.")
     st.warning("Disclaimer: Yeh sirf shaikshik uddeshyon ke liye hai. Live trading ke liye iska upyog na karein.")
 
-    # ON/OFF toggle button
+    # ON/OFF toggle button ko h2 ke neeche rakhein
     paper_trading_on = st.toggle("Paper Trading ON/OFF", value=False, help="Toggle on to start automatic data refresh and paper trading.")
     
     # Trade log aur data ke liye session state ko initialize karein
