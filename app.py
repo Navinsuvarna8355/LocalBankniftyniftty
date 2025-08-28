@@ -172,6 +172,10 @@ def main():
     st.title("NSE Option Chain Analysis Dashboard")
     st.markdown("This dashboard provides live analysis of NIFTY and BANKNIFTY based on a custom trading strategy.")
 
+    # Initialize session state for the trade log if it doesn't exist
+    if 'trade_log' not in st.session_state:
+        st.session_state.trade_log = []
+
     # UI for symbol and EMA signal selection in the sidebar
     symbol_choice = st.sidebar.radio(
         "Select Symbol",
