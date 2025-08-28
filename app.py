@@ -130,22 +130,19 @@ def display_dashboard(symbol, info, signal, suggested_side):
     # Main container
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     
-    st.header(f"{symbol} Live Analysis")
+    st.header("NSE Option Chain Dashboard", help="Live analysis of NIFTY and BANKNIFTY based on PCR strategy.")
     st.divider()
 
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(f'<div class="card blue-card">Live Price<div style="font-size:1.5rem; font-weight: bold;">₹ {info["underlying"]:.2f}</div></div>', unsafe_allow_html=True)
     with col2:
-        st.markdown(f'<div class="card">Total PCR<div style="font-size:1.5rem; font-weight: bold;">{info["pcr_total"]:.2f}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card">PCR<div style="font-size:1.5rem; font-weight: bold;">{info["pcr_total"]:.2f}</div></div>', unsafe_allow_html=True)
     with col3:
-        st.markdown(f'<div class="card">Near PCR<div style="font-size:1.5rem; font-weight: bold;">{info["pcr_near"]:.2f}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card">Trend<div style="font-size:1.5rem; font-weight: bold;">{info["trend"]}</div></div>', unsafe_allow_html=True)
 
     st.subheader("Strategy Signal")
     
-    st.write(f"**Used PCR**: {info['pcr_used']:.2f} ({'Near Expiry' if info['use_near_pcr'] else 'Total OI'})")
-    st.write(f"**Trend**: {info['trend']}")
-
     if signal == "BUY":
         st.success(f"Signal: {signal} ({suggested_side}) - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} CE")
     elif signal == "SELL":
@@ -155,8 +152,7 @@ def display_dashboard(symbol, info, signal, suggested_side):
         
     st.divider()
     
-    st.write(f"Last updated: {info['last_update']}")
-    st.write("Data source: NSE India")
+    st.write(f"Data source: NSE India | Last Updated: {info['last_update']}")
     st.warning("Disclaimer: This is for educational purposes only. Do not use for live trading.")
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -175,10 +171,6 @@ def main():
     
     st.title("NSE Option Chain Analysis Dashboard")
     st.markdown("This dashboard provides live analysis of NIFTY and BANKNIFTY based on a custom trading strategy.")
-
-    # Initialize session state for the trade log if it doesn't exist
-    if 'trade_log' not in st.session_state:
-        st.session_state.trade_log = []
 
     # UI for symbol and EMA signal selection in the sidebar
     symbol_choice = st.sidebar.radio(
