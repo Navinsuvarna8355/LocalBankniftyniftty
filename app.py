@@ -9,7 +9,7 @@ from datetime import datetime
 # Set up logging to show debug information
 logging.basicConfig(level=logging.INFO)
 
-# --- Updated Data Fetching Function using a Public API ---
+# --- Data Fetching Functions ---
 def fetch_option_chain_from_api(symbol='BANKNIFTY'):
     """
     Fetches live option chain data from a third-party API.
@@ -31,6 +31,32 @@ def fetch_option_chain_from_api(symbol='BANKNIFTY'):
     except requests.exceptions.RequestException as e:
         logging.error(f"Error fetching data from API for {symbol}: {e}")
         raise Exception(f"Failed to fetch data. Error: {e}")
+
+def fetch_vix_data():
+    """
+    Fetches the India VIX value from a public NSE API.
+    """
+    vix_api_url = "https://www.nseindia.com/api/all-indices"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    
+    try:
+        logging.info("Fetching India VIX data...")
+        response = requests.get(vix_api_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        for index in data.get('data', []):
+            if index.get('index') == 'India VIX':
+                return index.get('lastPrice')
+        
+        logging.warning("India VIX data not found in the response.")
+        return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching India VIX data: {e}")
+        return None
 
 def compute_oi_pcr_and_underlying(data):
     """
@@ -90,9 +116,22 @@ def determine_signal(pcr, trend, ema_signal):
         suggested_option = None
     return signal, suggested_option
 
-def display_dashboard(symbol, info, signal, suggested_side):
+def get_vix_label(vix_value):
     """
-    Displays the dashboard for a given symbol, including the trade log feature.
+    Returns a volatility label and advice based on the VIX value.
+    """
+    if vix_value is None:
+        return {"value": 0, "label": "Not Available", "advice": "Volatility data is not available."}
+    if vix_value < 15:
+        return {"value": vix_value, "label": "Low Volatility", "advice": "The market has low volatility. Large price swings are not expected."}
+    elif 15 <= vix_value <= 25:
+        return {"value": vix_value, "label": "Medium Volatility", "advice": "The market has medium volatility. You can trade according to your strategy."}
+    else:
+        return {"value": vix_value, "label": "High Volatility", "advice": "The market has very high volatility. Trade with great caution or avoid trading."}
+
+def display_dashboard(symbol, info, signal, suggested_side, vix_data):
+    """
+    Displays the dashboard for a given symbol, including the trade log feature and VIX.
     """
     # Use HTML to replicate the local UI design
     st.markdown("""
@@ -135,13 +174,20 @@ def display_dashboard(symbol, info, signal, suggested_side):
     st.subheader(f"{symbol} Option Chain Dashboard", help="Live analysis based on PCR strategy.")
     st.divider()
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f'<div class="card blue-card">Live Price<div style="font-size:1.5rem; font-weight: bold;">₹ {info["underlying"]:.2f}</div></div>', unsafe_allow_html=True)
     with col2:
         st.markdown(f'<div class="card">PCR<div style="font-size:1.5rem; font-weight: bold;">{info["pcr_total"]:.2f}</div></div>', unsafe_allow_html=True)
     with col3:
         st.markdown(f'<div class="card">Trend<div style="font-size:1.5rem; font-weight: bold;">{info["trend"]}</div></div>', unsafe_allow_html=True)
+    with col4:
+        st.markdown(f'<div class="card">India VIX<div style="font-size:1.5rem; font-weight: bold;">{vix_data["value"]:.2f}</div><div style="font-size:0.8rem;">{vix_data["label"]}</div></div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.subheader("Market Volatility Advice")
+    st.info(vix_data["advice"])
+    st.markdown("---")
 
     st.subheader("Strategy Signal")
     
@@ -177,7 +223,6 @@ def display_simulated_sms(phone_number, message_type, trade_details):
     st.sidebar.subheader("SMS Notification")
     st.sidebar.info(full_message)
 
-
 def main():
     """
     Main function to run the Streamlit app.
@@ -199,7 +244,6 @@ def main():
         st.session_state.nifty_data = None
     if 'banknifty_data' not in st.session_state:
         st.session_state.banknifty_data = None
-    # Add a flag to prevent multiple logs for the same signal
     if 'last_logged_signal' not in st.session_state:
         st.session_state.last_logged_signal = {}
     
@@ -217,10 +261,8 @@ def main():
     
     use_near_pcr = st.sidebar.checkbox("Use Near Expiry PCR?", value=True)
     
-    # Add a new input for Lot Size
     lot_size = st.sidebar.number_input("Lot Size", min_value=1, value=1, step=1)
 
-    # Refresh button
     refresh_button = st.sidebar.button("Refresh Data")
     
     # UI for symbol selection on the main page
@@ -240,7 +282,9 @@ def main():
             with st.spinner(f"Fetching live data for {symbol_choice}... Please wait."):
                 data = fetch_option_chain_from_api(symbol_choice)
                 info = compute_oi_pcr_and_underlying(data)
+                vix_value = fetch_vix_data()
             
+            vix_data = get_vix_label(vix_value)
             pcr_used = info['pcr_near'] if use_near_pcr else info['pcr_total']
             trend = "BULLISH" if pcr_used >= 1 else "BEARISH"
             signal, suggested_side = determine_signal(pcr_used, trend, ema_signal_choice)
@@ -257,7 +301,8 @@ def main():
                 'ema_signal': ema_signal_choice,
                 'signal': signal,
                 'suggested_side': suggested_side,
-                'lot_size': lot_size # Store the current lot size for the dashboard
+                'lot_size': lot_size,
+                'vix_data': vix_data
             }
 
             if symbol_choice == 'NIFTY':
@@ -277,43 +322,34 @@ def main():
         current_info = st.session_state.banknifty_data
 
     if current_info and current_info['signal'] != "SIDEWAYS":
-        # Check if the signal has changed since the last log
         log_key = f"{symbol_choice}_{current_info['signal']}"
         if st.session_state.last_logged_signal.get(log_key) != current_info['last_update']:
             
-            # Log the new trade
             log_entry = {
                 "Timestamp": current_info['last_update'],
-                "Symbol": symbol_choice,
+                "Symbol": current_info['Symbol'],
                 "Signal": current_info['signal'],
                 "Suggested Option": f"₹{round(current_info['underlying']/100)*100} {current_info['suggested_side']}",
                 "Entry Price": current_info['underlying'],
                 "Exit Time": "-",
-                "Current Price": current_info['underlying'], # Initial current price is the entry price
+                "Current Price": current_info['underlying'],
                 "P&L": 0.0,
                 "Final P&L": "-",
                 "Used PCR": f"{current_info['pcr_used']:.2f}",
-                "Lot Size": lot_size, # Log the lot size
-                "Status": "Active" # To track active trades
+                "Lot Size": lot_size,
+                "Status": "Active"
             }
             st.session_state.trade_log.append(log_entry)
             st.session_state.last_logged_signal[log_key] = current_info['last_update']
             
-            # Display simulated SMS for trade entry
             display_simulated_sms(phone_number, "entry", log_entry)
 
-    # Auto-exit logic for active trades
     current_nifty_price = st.session_state.nifty_data['underlying'] if st.session_state.nifty_data else None
     current_banknifty_price = st.session_state.banknifty_data['underlying'] if st.session_state.banknifty_data else None
-    
-    # Get the latest signal for the selected symbol to check for exit conditions
     current_signal_for_exit = current_info['signal'] if current_info else None
 
-    # Iterate over a copy to avoid issues with modifying the list while iterating
     for entry in list(st.session_state.trade_log):
         if entry['Status'] == "Active" and entry['Symbol'] == symbol_choice:
-            # Check for exit conditions
-            # Exit if the current signal is opposite of the entry signal or is 'SIDEWAYS'
             if (current_signal_for_exit == "SELL" and entry['Signal'] == "BUY") or \
                (current_signal_for_exit == "BUY" and entry['Signal'] == "SELL") or \
                (current_signal_for_exit == "SIDEWAYS"):
@@ -325,23 +361,18 @@ def main():
                     current_price = current_banknifty_price
                 
                 if current_price:
-                    # Find the original entry in the session state to modify it
                     for original_entry in st.session_state.trade_log:
                         if original_entry['Timestamp'] == entry['Timestamp'] and original_entry['Symbol'] == entry['Symbol']:
                             original_entry['Status'] = "Closed"
                             original_entry['Exit Time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             original_entry['Current Price'] = current_price
-                            # Calculate final P&L
                             pnl_calc = (current_price - original_entry['Entry Price']) * original_entry['Lot Size'] if original_entry['Signal'] == "BUY" else (original_entry['Entry Price'] - current_price) * original_entry['Lot Size']
-                            original_entry['P&L'] = 0.0 # Reset live P&L for closed trade
+                            original_entry['P&L'] = 0.0
                             original_entry['Final P&L'] = pnl_calc
                             st.success(f"Trade for {original_entry['Symbol']} has been auto-exited. Final P&L: ₹{pnl_calc:.2f}")
-                            
-                            # Display simulated SMS for trade exit
                             display_simulated_sms(phone_number, "exit", original_entry)
                             break
     
-    # Update P&L for all active trades
     for entry in st.session_state.trade_log:
         if entry['Status'] == "Active":
             current_symbol = entry['Symbol']
@@ -355,43 +386,35 @@ def main():
             else:
                 continue
 
-            # Calculate live P&L based on signal and lot size
             if current_signal == "BUY":
                 pnl = (current_price - current_entry_price) * entry['Lot Size']
-            else: # SELL
+            else:
                 pnl = (current_entry_price - current_price) * entry['Lot Size']
 
             entry['Current Price'] = current_price
             entry['P&L'] = pnl
 
-    # Display the dashboard based on the selected symbol
     if symbol_choice == 'NIFTY' and st.session_state.nifty_data:
         info = st.session_state.nifty_data
-        display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'])
+        display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'], info['vix_data'])
     elif symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data:
         info = st.session_state.banknifty_data
-        display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'])
+        display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'], info['vix_data'])
     else:
         st.info("Please select a symbol and click 'Refresh Data' to view the dashboard.")
     
-    # Display the trade log
     st.subheader("Trade Log")
     if st.session_state.trade_log:
-        # Create a new list of entries to display
         display_log = []
         for entry in st.session_state.trade_log:
-            # Create a copy to avoid modifying the original session state dicts
             display_entry = entry.copy()
-            # Format P&L based on status
             display_entry['P&L (Live/Final)'] = f"₹{display_entry['P&L']:.2f}" if display_entry['Status'] == 'Active' else f"₹{display_entry['Final P&L']:.2f}"
             display_log.append(display_entry)
         
         df_log = pd.DataFrame(display_log)
         
-        # Drop the intermediate P&L and Final P&L columns
         df_log = df_log.drop(columns=['P&L', 'Final P&L'])
         
-        # Apply color styling
         st.dataframe(df_log.style.apply(lambda x: ['background: #d4edda' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) > 0 else 'background: #f8d7da' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) < 0 else '' for i in x], axis=1))
     else:
         st.info("Trade log is empty. Log a trade above.")
