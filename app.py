@@ -156,7 +156,7 @@ def main():
     """
     st.set_page_config(
         page_title="NSE Option Chain Strategy",
-        page_icon="�",
+        page_icon="📈",
         layout="wide",
         initial_sidebar_state="collapsed",
     )
@@ -191,4 +191,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-�
