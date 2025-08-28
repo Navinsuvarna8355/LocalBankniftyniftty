@@ -107,9 +107,11 @@ def display_dashboard(symbol, info, signal, suggested_side):
                 padding: 1rem;
                 border-radius: 0.5rem;
                 text-align: center;
+                color: #1f2937; /* Add this line for dark text color */
             }
             .blue-card {
                 background-color: #dbeafe; /* Corresponds to blue-100 */
+                color: #1f2937; /* Add this line for dark text color */
             }
             .signal-card {
                 background-color: #f9fafb; /* Corresponds to gray-50 */
