@@ -6,16 +6,14 @@ import requests
 import logging
 from datetime import datetime
 
-# Set up logging to show debug information
+# Logging setup takay debugging mein madad mile
 logging.basicConfig(level=logging.INFO)
 
 # --- Data Fetching Functions ---
 def fetch_option_chain_from_api(symbol):
     """
-    Fetches live option chain data from a third-party API.
-    
-    This function uses a fresh requests.Session for each request to ensure
-    the session and cookies are not stale.
+    Ek third-party API se live option chain data fetch karta hai.
+    Yeh function har request ke liye ek naya requests.Session istemal karta hai taake session ya cookies expire na hon.
     """
     api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     
@@ -25,28 +23,28 @@ def fetch_option_chain_from_api(symbol):
     }
 
     try:
-        logging.info(f"Attempting to fetch data for {symbol}...")
+        logging.info(f"{symbol} ke liye data fetch karne ki koshish kar rahe hain...")
         
-        # Use a fresh requests session for each request
+        # Har request ke liye ek naya requests session
         session = requests.Session()
         
-        # First request to the homepage to get the session cookie
+        # Pehli request homepage par takay session cookie mil jaye
         homepage_url = "https://www.nseindia.com/"
         session.get(homepage_url, headers=headers, timeout=10)
         
-        # Second request to the actual API, which will use the session cookie
+        # Dusri request asli API par, jo session cookie ka istemal karegi
         response = session.get(api_url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
-        logging.info("Data fetched successfully.")
+        logging.info("Data safalta purvak fetch ho gaya.")
         return data
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching data from API for {symbol}: {e}")
-        raise Exception(f"Failed to fetch data. Error: {e}")
+        logging.error(f"{symbol} ke liye API se data fetch karne mein galti: {e}")
+        raise Exception(f"Data fetch karne mein nakam rahe. Galti: {e}")
 
 def fetch_vix_data():
     """
-    Fetches the India VIX value from a public NSE API.
+    NSE public API se India VIX ki value fetch karta hai.
     """
     vix_api_url = "https://www.nseindia.com/api/all-indices"
     headers = {
@@ -55,7 +53,7 @@ def fetch_vix_data():
     }
     
     try:
-        logging.info("Fetching India VIX data...")
+        logging.info("India VIX data fetch kar rahe hain...")
         response = requests.get(vix_api_url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
@@ -64,22 +62,22 @@ def fetch_vix_data():
             if index.get('index') == 'India VIX':
                 return index.get('lastPrice')
         
-        logging.warning("India VIX data not found in the response.")
+        logging.warning("India VIX data response mein nahi mila.")
         return None
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching India VIX data: {e}")
+        logging.error(f"India VIX data fetch karne mein galti: {e}")
         return None
 
 def compute_oi_pcr_and_underlying(data):
     """
-    Computes PCR and gets underlying price from the fetched data.
+    Fetched data se PCR aur underlying price compute karta hai.
     """
     if not data or 'records' not in data or 'data' not in data['records']:
         return {'underlying': None, 'pcr_total': None, 'pcr_near': None, 'expiry': None}
 
     expiry_dates = data['records']['expiryDates']
     if not expiry_dates:
-        raise ValueError("No expiry dates found in the data.")
+        raise ValueError("Data mein koi expiry dates nahi mili.")
         
     current_expiry = expiry_dates[0]
     
@@ -94,7 +92,7 @@ def compute_oi_pcr_and_underlying(data):
         pe_total_oi += item.get('PE', {}).get('openInterest', 0)
         ce_total_oi += item.get('CE', {}).get('openInterest', 0)
         
-        # Check for near expiry data
+        # Near expiry data ke liye check karein
         if item.get('expiryDate') == current_expiry:
             pe_near_oi += item.get('PE', {}).get('openInterest', 0)
             ce_near_oi += item.get('CE', {}).get('openInterest', 0)
@@ -112,7 +110,7 @@ def compute_oi_pcr_and_underlying(data):
 # --- Strategy and UI Functions ---
 def determine_signal(pcr, trend, ema_signal):
     """
-    Based on PCR, trend and EMA signal, determines the final trading signal.
+    PCR, trend aur EMA signal ke aadhar par final trading signal nirdharit karta hai.
     """
     signal = "SIDEWAYS"
     suggested_option = None
@@ -130,22 +128,22 @@ def determine_signal(pcr, trend, ema_signal):
 
 def get_vix_label(vix_value):
     """
-    Returns a volatility label and advice based on the VIX value.
+    VIX value ke aadhar par volatility label aur salah deta hai.
     """
     if vix_value is None:
-        return {"value": 0, "label": "Not Available", "advice": "Volatility data is not available."}
+        return {"value": 0, "label": "Uplabdh nahi", "advice": "Volatility data uplabdh nahi hai."}
     if vix_value < 15:
-        return {"value": vix_value, "label": "Low Volatility", "advice": "The market has low volatility. Large price swings are not expected."}
+        return {"value": vix_value, "label": "Kam Volatility", "advice": "Market mein kam volatility hai. Bade price swings ki ummeed nahi hai."}
     elif 15 <= vix_value <= 25:
-        return {"value": vix_value, "label": "Medium Volatility", "advice": "The market has medium volatility. You can trade according to your strategy."}
+        return {"value": vix_value, "label": "Madhyam Volatility", "advice": "Market mein madhyam volatility hai. Aap apni strategy ke hisab se trade kar sakte hain."}
     else:
-        return {"value": vix_value, "label": "High Volatility", "advice": "The market has very high volatility. Trade with great caution or avoid trading."}
+        return {"value": vix_value, "label": "High Volatility", "advice": "Market mein bahut zyada volatility hai. Savdhani se trade karein ya avoid karein."}
 
 def display_dashboard(symbol, info, vix_data):
     """
-    Displays the dashboard for a given symbol, including the trade log feature and VIX.
+    Diye gaye symbol ke liye dashboard display karta hai, jismein trade log aur VIX shamil hain.
     """
-    # Use HTML to replicate the local UI design
+    # Local UI design ko replicate karne ke liye HTML ka upyog karein
     st.markdown("""
         <style>
             .main-container {
@@ -154,18 +152,18 @@ def display_dashboard(symbol, info, vix_data):
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             }
             .card {
-                background-color: #e5e7eb; /* Corresponds to gray-200 */
+                background-color: #e5e7eb; /* gray-200 ke barabar */
                 padding: 1rem;
                 border-radius: 0.5rem;
                 text-align: center;
-                color: #1f2937; /* Add this line for dark text color */
+                color: #1f2937; /* dark text color ke liye */
             }
             .blue-card {
-                background-color: #dbeafe; /* Corresponds to blue-100 */
-                color: #1f2937; /* Add this line for dark text color */
+                background-color: #dbeafe; /* blue-100 ke barabar */
+                color: #1f2937; /* dark text color ke liye */
             }
             .signal-card {
-                background-color: #f9fafb; /* Corresponds to gray-50 */
+                background-color: #f9fafb; /* gray-50 ke barabar */
                 padding: 1.5rem;
                 border-radius: 0.5rem;
                 text-align: center;
@@ -183,7 +181,7 @@ def display_dashboard(symbol, info, vix_data):
     # Main container
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     
-    st.subheader(f"{symbol} Option Chain Dashboard", help="Live analysis based on PCR strategy.")
+    st.subheader(f"{symbol} Option Chain Dashboard", help="PCR strategy ke aadhar par live analysis.")
     st.divider()
 
     col1, col2, col3, col4 = st.columns(4)
@@ -203,24 +201,24 @@ def display_dashboard(symbol, info, vix_data):
 
     st.subheader("Strategy Signal")
     
-    # Show explicit buy/sell action on CE/PE
+    # CE/PE par explicit buy/sell action dikhayein
     if info['signal'] == "BUY":
         st.success(f"Signal: BUY CE - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} CE")
     elif info['signal'] == "SELL":
         st.error(f"Signal: SELL PE - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} PE")
     else:
-        st.info("Signal: SIDEWAYS - No strong signal found.")
+        st.info("Signal: SIDEWAYS - Koi strong signal nahi mila.")
         
     st.divider()
     
     st.write(f"Data source: NSE India | Last Updated: {info['last_update']}")
-    st.warning("Disclaimer: This is for educational purposes only. Do not use for live trading.")
+    st.warning("Disclaimer: Yeh sirf shaikshik uddeshyon ke liye hai. Live trading ke liye iska upyog na karein.")
 
     st.markdown('</div>', unsafe_allow_html=True)
     
 def display_simulated_sms(phone_number, message_type, trade_details):
     """
-    Displays a simulated SMS message in the Streamlit app.
+    Streamlit app mein ek simulated SMS message display karta hai.
     """
     if not phone_number:
         return
@@ -237,7 +235,7 @@ def display_simulated_sms(phone_number, message_type, trade_details):
 
 def main():
     """
-    Main function to run the Streamlit app.
+    Streamlit app chalane ke liye main function.
     """
     st.set_page_config(
         page_title="NSE Option Chain Strategy",
@@ -247,9 +245,9 @@ def main():
     )
     
     st.title("NSE Option Chain Analysis Dashboard")
-    st.markdown("This dashboard provides live analysis of NIFTY and BANKNIFTY based on a custom trading strategy.")
+    st.markdown("Yeh dashboard ek custom trading strategy ke aadhar par NIFTY aur BANKNIFTY ka live analysis pradan karta hai.")
 
-    # Initialize session state for the trade log and data
+    # Trade log aur data ke liye session state ko initialize karein
     if 'trade_log' not in st.session_state:
         st.session_state.trade_log = []
     if 'data_cache' not in st.session_state:
@@ -260,65 +258,86 @@ def main():
     if 'last_logged_signal' not in st.session_state:
         st.session_state.last_logged_signal = {}
     
-    # --- UI for user inputs in the sidebar ---
+    # --- Sidebar mein user inputs ke liye UI ---
     st.sidebar.header("Settings")
-    phone_number = st.sidebar.text_input("Enter Your Phone Number", help="This is a simulation only. No actual SMS will be sent.")
+    phone_number = st.sidebar.text_input("Apna Phone Number Dalein", help="Yeh sirf ek simulation hai. Koi asli SMS nahi bheja jayega.")
 
     ema_signal_choice = st.sidebar.radio(
-        "Select EMA Signal",
+        "EMA Signal Chunein",
         ["BUY", "SELL"],
         index=0,
         horizontal=True,
-        help="Select 'BUY' for bullish EMA crossover or 'SELL' for bearish."
+        help="Bullish EMA crossover ke liye 'BUY' ya bearish ke liye 'SELL' chunein."
     )
     
-    use_near_pcr = st.sidebar.checkbox("Use Near Expiry PCR?", value=True)
+    use_near_pcr = st.sidebar.checkbox("Near Expiry PCR ka upyog karein?", value=True)
     
     lot_size = st.sidebar.number_input("Lot Size", min_value=1, value=1, step=1)
     
-    # UI for symbol selection on the main page
+    # Main page par symbol selection ke liye UI
     symbol_choice = st.radio(
-        "Select Symbol",
+        "Symbol Chunein",
         ["NIFTY", "BANKNIFTY"],
         index=0,
         horizontal=True
     )
     
-    # A single button to fetch and refresh data for the currently selected symbol
-    refresh_button = st.sidebar.button(f"Refresh {symbol_choice} Data")
+    # Dono symbols ke liye data fetch aur refresh karne ke liye ek button
+    refresh_button = st.sidebar.button("Data Refresh Karein")
     
-    # --- Data Fetching and Display Logic ---
+    # --- Data Fetching aur Display Logic ---
     
-    # Fetch data on button click or if data for the current symbol is missing
-    if refresh_button or st.session_state.data_cache[symbol_choice] is None:
+    # Button click par ya agar cache mein data nahi hai toh data fetch karein
+    if refresh_button or (st.session_state.data_cache['NIFTY'] is None and st.session_state.data_cache['BANKNIFTY'] is None):
         try:
-            with st.spinner(f"Fetching live data for {symbol_choice}..."):
-                # Fetch only for the selected symbol
-                raw_data = fetch_option_chain_from_api(symbol_choice)
-                info = compute_oi_pcr_and_underlying(raw_data)
+            with st.spinner("NIFTY aur BANKNIFTY ke liye live data fetch kar rahe hain..."):
+                # Dono symbols ke liye data ek saath fetch karein
+                nifty_raw_data = fetch_option_chain_from_api('NIFTY')
+                banknifty_raw_data = fetch_option_chain_from_api('BANKNIFTY')
+                
                 vix_value = fetch_vix_data()
                 vix_data = get_vix_label(vix_value)
                 
-                pcr_used = info['pcr_near'] if use_near_pcr else info['pcr_total']
-                trend = "BULLISH" if pcr_used >= 1 else "BEARISH"
-                signal, suggested_side = determine_signal(pcr_used, trend, ema_signal_choice)
+                # NIFTY data ko process karein
+                nifty_info = compute_oi_pcr_and_underlying(nifty_raw_data)
+                pcr_used_nifty = nifty_info['pcr_near'] if use_near_pcr else nifty_info['pcr_total']
+                trend_nifty = "BULLISH" if pcr_used_nifty >= 1 else "BEARISH"
+                signal_nifty, suggested_side_nifty = determine_signal(pcr_used_nifty, trend_nifty, ema_signal_choice)
                 
-                st.session_state.data_cache[symbol_choice] = {
-                    'underlying': info['underlying'],
-                    'pcr_total': info['pcr_total'],
-                    'pcr_near': info['pcr_near'],
+                st.session_state.data_cache['NIFTY'] = {
+                    'underlying': nifty_info['underlying'],
+                    'pcr_total': nifty_info['pcr_total'],
+                    'pcr_near': nifty_info['pcr_near'],
                     'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    'trend': trend,
-                    'signal': signal,
-                    'suggested_side': suggested_side,
+                    'trend': trend_nifty,
+                    'signal': signal_nifty,
+                    'suggested_side': suggested_side_nifty,
+                    'vix_data': vix_data
+                }
+                
+                # BANKNIFTY data ko process karein
+                banknifty_info = compute_oi_pcr_and_underlying(banknifty_raw_data)
+                pcr_used_banknifty = banknifty_info['pcr_near'] if use_near_pcr else banknifty_info['pcr_total']
+                trend_banknifty = "BULLISH" if pcr_used_banknifty >= 1 else "BEARISH"
+                signal_banknifty, suggested_side_banknifty = determine_signal(pcr_used_banknifty, trend_banknifty, ema_signal_choice)
+                
+                st.session_state.data_cache['BANKNIFTY'] = {
+                    'underlying': banknifty_info['underlying'],
+                    'pcr_total': banknifty_info['pcr_total'],
+                    'pcr_near': banknifty_info['pcr_near'],
+                    'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'trend': trend_banknifty,
+                    'signal': signal_banknifty,
+                    'suggested_side': suggested_side_banknifty,
                     'vix_data': vix_data
                 }
             
         except Exception as e:
-            st.error(f"Error fetching data for {symbol_choice}: {e}")
-            st.session_state.data_cache[symbol_choice] = None
+            st.error(f"Data fetch karne mein galti: {e}")
+            st.session_state.data_cache['NIFTY'] = None
+            st.session_state.data_cache['BANKNIFTY'] = None
     
-    # --- Auto-Log and P&L Update Logic ---
+    # --- Auto-Log aur P&L Update Logic ---
     current_info = st.session_state.data_cache[symbol_choice]
     
     if current_info and current_info['signal'] != "SIDEWAYS":
@@ -360,7 +379,7 @@ def main():
                             pnl_calc = (current_price - original_entry['Entry Price']) * original_entry['Lot Size'] if original_entry['Signal'] == "BUY" else (original_entry['Entry Price'] - current_price) * original_entry['Lot Size']
                             original_entry['P&L'] = 0.0
                             original_entry['Final P&L'] = pnl_calc
-                            st.success(f"Trade for {original_entry['Symbol']} has been auto-exited. Final P&L: ₹{pnl_calc:.2f}")
+                            st.success(f"{original_entry['Symbol']} ke liye trade auto-exit ho gaya hai. Final P&L: ₹{pnl_calc:.2f}")
                             display_simulated_sms(phone_number, "exit", original_entry)
                             break
     
@@ -382,13 +401,13 @@ def main():
             entry['Current Price'] = current_price
             entry['P&L'] = pnl
 
-    # --- Display dashboards ---
+    # --- Dashboards display karein ---
     if st.session_state.data_cache[symbol_choice]:
         info = st.session_state.data_cache[symbol_choice]
         vix_data = info.get('vix_data', get_vix_label(fetch_vix_data()))
         display_dashboard(symbol_choice, info, vix_data)
     else:
-        st.info("Please select a symbol and click 'Refresh Data' to view the dashboard.")
+        st.info("Kripya ek symbol chunein aur dashboard dekhne ke liye 'Data Refresh Karein' button par click karein.")
     
     st.subheader("Trade Log")
     if st.session_state.trade_log:
@@ -404,7 +423,7 @@ def main():
         
         st.dataframe(df_log.style.apply(lambda x: ['background: #d4edda' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) > 0 else 'background: #f8d7da' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) < 0 else '' for i in x], axis=1))
     else:
-        st.info("Trade log is empty. Log a trade above.")
+        st.info("Trade log khaali hai. Upar ek trade log karein.")
     
 if __name__ == "__main__":
     main()
