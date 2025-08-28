@@ -167,14 +167,14 @@ def display_simulated_sms(phone_number, message_type, trade_details):
     if not phone_number:
         return
 
-    full_message = f"नंबर: {phone_number}\n"
+    full_message = f"Number: {phone_number}\n"
     if message_type == "entry":
-        full_message += f"नया ट्रेड: {trade_details['Symbol']} में {trade_details['Signal']} सिग्नल। एंट्री प्राइस: ₹{trade_details['Entry Price']:.2f}"
+        full_message += f"New Trade: {trade_details['Symbol']} with a {trade_details['Signal']} signal. Entry Price: ₹{trade_details['Entry Price']:.2f}"
     elif message_type == "exit":
-        full_message += f"ट्रेड बंद: {trade_details['Symbol']} का ट्रेड बंद हुआ। एक्ज़िट प्राइस: ₹{trade_details['Current Price']:.2f}। P&L: ₹{trade_details['Final P&L']:.2f}"
+        full_message += f"Trade Closed: {trade_details['Symbol']} trade has been closed. Exit Price: ₹{trade_details['Current Price']:.2f}. P&L: ₹{trade_details['Final P&L']:.2f}"
     
     st.sidebar.markdown("---")
-    st.sidebar.subheader("SMS नोटिफिकेशन")
+    st.sidebar.subheader("SMS Notification")
     st.sidebar.info(full_message)
 
 
@@ -204,28 +204,28 @@ def main():
         st.session_state.last_logged_signal = {}
     
     # --- UI for user inputs in the sidebar ---
-    st.sidebar.header("सेटिंग्स")
-    phone_number = st.sidebar.text_input("अपना फ़ोन नंबर डालें", help="यह केवल एक सिमुलेशन है। असल में SMS नहीं भेजा जाएगा।")
+    st.sidebar.header("Settings")
+    phone_number = st.sidebar.text_input("Enter Your Phone Number", help="This is a simulation only. No actual SMS will be sent.")
 
     ema_signal_choice = st.sidebar.radio(
-        "EMA सिग्नल चुनें",
+        "Select EMA Signal",
         ["BUY", "SELL"],
         index=0,
         horizontal=True,
-        help="बुलिश (bullish) EMA क्रॉसओवर के लिए 'BUY' या बेयरिश (bearish) के लिए 'SELL' चुनें।"
+        help="Select 'BUY' for bullish EMA crossover or 'SELL' for bearish."
     )
     
-    use_near_pcr = st.sidebar.checkbox("क्या नज़दीकी एक्सपायरी PCR का उपयोग करें?", value=True)
+    use_near_pcr = st.sidebar.checkbox("Use Near Expiry PCR?", value=True)
     
     # Add a new input for Lot Size
-    lot_size = st.sidebar.number_input("लॉट साइज़", min_value=1, value=1, step=1)
+    lot_size = st.sidebar.number_input("Lot Size", min_value=1, value=1, step=1)
 
     # Refresh button
-    refresh_button = st.sidebar.button("डेटा रिफ्रेश करें")
+    refresh_button = st.sidebar.button("Refresh Data")
     
     # UI for symbol selection on the main page
     symbol_choice = st.radio(
-        "सिंबल चुनें",
+        "Select Symbol",
         ["NIFTY", "BANKNIFTY"],
         index=0,
         horizontal=True
@@ -267,7 +267,7 @@ def main():
             
         except Exception as e:
             st.error(f"Error fetching data for {symbol_choice}: {e}")
-            st.info("Please click 'डेटा रिफ्रेश करें' to try again.")
+            st.info("Please click 'Refresh Data' to try again.")
 
     # --- Auto-Log and P&L Update Logic ---
     current_info = None
@@ -372,10 +372,10 @@ def main():
         info = st.session_state.banknifty_data
         display_dashboard(symbol_choice, info, info['signal'], info['suggested_side'])
     else:
-        st.info("कृपया एक सिंबल चुनें और डैशबोर्ड देखने के लिए 'डेटा रिफ्रेश करें' पर क्लिक करें।")
+        st.info("Please select a symbol and click 'Refresh Data' to view the dashboard.")
     
     # Display the trade log
-    st.subheader("ट्रेड लॉग")
+    st.subheader("Trade Log")
     if st.session_state.trade_log:
         # Create a new list of entries to display
         display_log = []
@@ -394,7 +394,7 @@ def main():
         # Apply color styling
         st.dataframe(df_log.style.apply(lambda x: ['background: #d4edda' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) > 0 else 'background: #f8d7da' if '₹' in str(x['P&L (Live/Final)']) and float(str(x['P&L (Live/Final)']).replace('₹', '')) < 0 else '' for i in x], axis=1))
     else:
-        st.info("ट्रेड लॉग खाली है। ऊपर से एक ट्रेड लॉग करें।")
+        st.info("Trade log is empty. Log a trade above.")
     
 if __name__ == "__main__":
     main()
