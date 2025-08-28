@@ -5,13 +5,12 @@ import datetime
 app = Flask(__name__)
 CORS(app)
 
-# Helper to get current IST timestamp string
+# Helper for IST timestamp
 def ist_now():
     return datetime.datetime.utcnow().astimezone(
         datetime.timezone(datetime.timedelta(hours=5, minutes=30))
     ).strftime("%Y-%m-%d %H:%M:%S")
 
-# Root health check
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
@@ -20,7 +19,6 @@ def home():
         "timestamp": ist_now()
     })
 
-# Strategy signal endpoints
 @app.route("/strategy/signal/NIFTY", methods=["GET"])
 def signal_nifty():
     return jsonify({
