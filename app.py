@@ -270,7 +270,7 @@ def main():
     st.sidebar.header("Settings")
     
     # ON/OFF toggle button
-    paper_trading_on = st.sidebar.toggle("Paper Trading ON/OFF", value=False, help="Toggle on to start automatic data refresh and paper trading.")
+    paper_trading_on = st.toggle("Paper Trading ON/OFF", value=False, help="Toggle on to start automatic data refresh and paper trading.")
     
     phone_number = st.sidebar.text_input("Apna Phone Number Dalein", help="Yeh sirf ek simulation hai. Koi asli SMS nahi bheja jayega.")
 
