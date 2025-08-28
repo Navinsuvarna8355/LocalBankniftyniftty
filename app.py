@@ -7,61 +7,91 @@ import logging
 from datetime import datetime
 import time
 
+# Logging setup for debugging (debugging ke liye logging)
+logging.basicConfig(level=logging.INFO)
+
 # --- Data Fetching Functions ---
-def fetch_option_chain_from_api(symbol):
+def fetch_option_chain_from_api(symbol, retries=3, backoff_factor=0.5):
     """
-    Fetches live option chain data from a third-party API.
-    (Ek third-party API se live option chain data fetch karta hai.)
-    Uses a fresh requests.Session for each request to avoid stale sessions.
-    (Har request ke liye ek naya requests.Session istemal karta hai taake session ya cookies expire na hon.)
+    Fetches live option chain data from a third-party API with retry logic.
+    (Retry logic ke saath ek third-party API se live option chain data fetch karta hai.)
     """
     api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.nseindia.com/option-chain',
+        'Connection': 'keep-alive',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
     }
 
-    try:
-        logging.info(f"Attempting to fetch data for {symbol}...")
-        session = requests.Session()
-        homepage_url = "https://www.nseindia.com/"
-        session.get(homepage_url, headers=headers, timeout=10)
-        response = session.get(api_url, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        logging.info("Data fetched successfully.")
-        return data
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching data from API for {symbol}: {e}")
-        raise Exception(f"Failed to fetch data. Error: {e}")
+    session = requests.Session()
+    session.get("https://www.nseindia.com/", headers=headers)
+    
+    for i in range(retries):
+        try:
+            logging.info(f"Attempting to fetch data for {symbol}, attempt {i+1} of {retries}...")
+            response = session.get(api_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            logging.info("Data fetched successfully.")
+            return data
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401 and i < retries - 1:
+                logging.warning(f"401 Unauthorized, retrying in {backoff_factor * (2 ** i)} seconds...")
+                time.sleep(backoff_factor * (2 ** i))
+            else:
+                logging.error(f"Error fetching data from API for {symbol}: {e}")
+                raise Exception(f"Failed to fetch data. Error: {e}")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error fetching data from API for {symbol}: {e}")
+            raise Exception(f"Failed to fetch data. Error: {e}")
+    
+    return None
 
-def fetch_vix_data():
+def fetch_vix_data(retries=3, backoff_factor=0.5):
     """
-    Fetches the India VIX value from a public NSE API.
-    (NSE public API se India VIX ki value fetch karta hai.)
+    Fetches the India VIX value from a public NSE API with retry logic.
+    (Retry logic ke saath NSE public API se India VIX ki value fetch karta hai.)
     """
     vix_api_url = "https://www.nseindia.com/api/all-indices"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.nseindia.com/market-data/live-equity-market',
+        'Connection': 'keep-alive',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
     }
+
+    session = requests.Session()
+    session.get("https://www.nseindia.com/", headers=headers)
     
-    try:
-        logging.info("Fetching India VIX data...")
-        response = requests.get(vix_api_url, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
-        for index in data.get('data', []):
-            if index.get('index') == 'India VIX':
-                return index.get('lastPrice')
-        
-        logging.warning("India VIX data not found in the response.")
-        return None
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching India VIX data: {e}")
-        return None
+    for i in range(retries):
+        try:
+            logging.info("Fetching India VIX data...")
+            response = session.get(vix_api_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            for index in data.get('data', []):
+                if index.get('index') == 'India VIX':
+                    return index.get('lastPrice')
+            
+            logging.warning("India VIX data not found in the response.")
+            return None
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401 and i < retries - 1:
+                logging.warning(f"401 Unauthorized, retrying in {backoff_factor * (2 ** i)} seconds...")
+                time.sleep(backoff_factor * (2 ** i))
+            else:
+                logging.error(f"Error fetching India VIX data: {e}")
+                return None
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error fetching India VIX data: {e}")
+            return None
 
 def compute_oi_pcr_and_underlying(data):
     """
@@ -482,4 +512,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-
