@@ -143,10 +143,11 @@ def display_dashboard(symbol, info, signal, suggested_side):
 
     st.subheader("Strategy Signal")
     
+    # Show explicit buy/sell action on CE/PE
     if signal == "BUY":
-        st.success(f"Signal: {signal} ({suggested_side}) - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} CE")
+        st.success(f"Signal: BUY CE - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} CE")
     elif signal == "SELL":
-        st.error(f"Signal: {signal} ({suggested_side}) - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} PE")
+        st.error(f"Signal: SELL PE - At-The-Money option suggested: ₹{round(info['underlying']/100)*100} PE")
     else:
         st.info("Signal: SIDEWAYS - No strong signal found.")
         
@@ -175,7 +176,7 @@ def main():
     # Initialize session state for the trade log if it doesn't exist
     if 'trade_log' not in st.session_state:
         st.session_state.trade_log = []
-
+    
     # UI for symbol and EMA signal selection in the sidebar
     symbol_choice = st.sidebar.radio(
         "Select Symbol",
@@ -273,7 +274,7 @@ def main():
         st.dataframe(df_log)
     else:
         st.info("Trade log is empty. Log a trade above.")
-
+    
 
 if __name__ == "__main__":
     main()
