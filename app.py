@@ -6,72 +6,65 @@ import requests
 import logging
 from datetime import datetime
 import time
-import asyncio
-from pyppeteer import launch
 
 # Logging setup for debugging (debugging ke liye logging)
 logging.basicConfig(level=logging.INFO)
 
-async def get_session_with_cookies():
+def get_session_with_cookies():
     """
-    Launches a headless browser (Pyppeteer) to get cookies from NSE India website.
-    (Pyppeteer headless browser chalata hai taaki NSE India website se cookies mil sakein.)
+    Creates a requests session with necessary headers and cookies to bypass NSE security.
+    (NSE security ko bypass karne ke liye zaruri headers aur cookies ke saath ek requests session banata hai.)
     """
-    logging.info("Launching headless browser to get initial cookies...")
+    logging.info("Creating requests session with manual headers...")
+    session = requests.Session()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.nseindia.com/option-chain',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+    }
+    session.headers.update(headers)
+    
+    # A small dummy request to get the initial cookies.
+    # (Initial cookies prapt karne ke liye ek chhota sa dummy request.)
     try:
-        browser = await launch(headless=True)
-        page = await browser.newPage()
-        await page.goto("https://www.nseindia.com")
-        await page.waitFor(5000) # Wait for 5 seconds to ensure all cookies are loaded
-        cookies = await page.cookies()
-        session = requests.Session()
-        for cookie in cookies:
-            session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
-        await browser.close()
-        logging.info("Successfully obtained cookies and created session.")
+        session.get("https://www.nseindia.com", timeout=10)
+        logging.info("Session created successfully.")
         return session
-    except Exception as e:
-        logging.error(f"Failed to get cookies from NSE: {e}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to get initial cookies from NSE: {e}")
         st.error("Cookies prapt karne mein galti. Kripya apna internet connection jaanchein.")
         return None
 
-# Use a global cache for the session to avoid re-scraping cookies on every run.
-# (Session ko global cache mein upyog karein taaki har run par cookies dobara scrape na karni pade.)
+# Use a global cache for the session to avoid re-creating it on every run.
+# (Session ko global cache mein upyog karein taaki har run par dobara na banana pade.)
 session_cache = {}
 
-async def get_cached_session():
+def get_cached_session():
     """
     Returns the cached session or creates a new one if it doesn't exist.
     (Cached session wapas karta hai ya agar maujood nahi hai toh naya banata hai.)
     """
     if 'nse_session' not in session_cache or not session_cache['nse_session']:
-        session_cache['nse_session'] = await get_session_with_cookies()
+        session_cache['nse_session'] = get_session_with_cookies()
     return session_cache['nse_session']
 
-async def fetch_option_chain_from_nse(symbol, retries=5, backoff_factor=1):
+def fetch_option_chain_from_nse(symbol, retries=5, backoff_factor=1):
     """
     Fetches live option chain data from NSE using the scraped session.
     (Scraped session ka upyog karke NSE se live option chain data fetch karta hai.)
     """
     api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.nseindia.com/option-chain',
-        'Connection': 'keep-alive',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-    }
-    
-    session = await get_cached_session()
+    session = get_cached_session()
     if not session:
         return None
 
     for i in range(retries):
         try:
             logging.info(f"Attempting to fetch data for {symbol}, attempt {i+1} of {retries}...")
-            response = session.get(api_url, headers=headers, timeout=10)
+            response = session.get(api_url, timeout=10)
             response.raise_for_status()
             data = response.json()
             logging.info("Data fetched successfully.")
@@ -80,7 +73,7 @@ async def fetch_option_chain_from_nse(symbol, retries=5, backoff_factor=1):
             if e.response.status_code == 401 and i < retries - 1:
                 logging.warning(f"401 Unauthorized. Re-fetching session in {backoff_factor * (2 ** i)} seconds...")
                 session_cache['nse_session'] = None # Clear cached session
-                session = await get_cached_session() # Get a new one
+                session = get_cached_session() # Get a new one
                 if not session:
                     return None
                 time.sleep(backoff_factor * (2 ** i))
@@ -93,29 +86,20 @@ async def fetch_option_chain_from_nse(symbol, retries=5, backoff_factor=1):
     
     return None
 
-async def fetch_vix_data(retries=5, backoff_factor=1):
+def fetch_vix_data(retries=5, backoff_factor=1):
     """
     Fetches the India VIX value from a public NSE API using the scraped session.
     (Scraped session ka upyog karke NSE public API se India VIX ki value fetch karta hai.)
     """
     vix_api_url = "https://www.nseindia.com/api/all-indices"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.nseindia.com/market-data/live-equity-market',
-        'Connection': 'keep-alive',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
-    }
-
-    session = await get_cached_session()
+    session = get_cached_session()
     if not session:
         return None
 
     for i in range(retries):
         try:
             logging.info("Fetching India VIX data...")
-            response = session.get(vix_api_url, headers=headers, timeout=10)
+            response = session.get(vix_api_url, timeout=10)
             response.raise_for_status()
             data = response.json()
             
@@ -129,7 +113,7 @@ async def fetch_vix_data(retries=5, backoff_factor=1):
             if e.response.status_code == 401 and i < retries - 1:
                 logging.warning(f"401 Unauthorized. Re-fetching session in {backoff_factor * (2 ** i)} seconds...")
                 session_cache['nse_session'] = None # Clear cached session
-                session = await get_cached_session() # Get a new one
+                session = get_cached_session() # Get a new one
                 if not session:
                     return None
                 time.sleep(backoff_factor * (2 ** i))
@@ -361,9 +345,9 @@ def main():
     if (time.time() - st.session_state.last_update_time > 60):
         try:
             with st.spinner("NIFTY aur BANKNIFTY ke liye live data fetch kar rahe hain..."):
-                nifty_raw_data = asyncio.run(fetch_option_chain_from_nse('NIFTY'))
-                banknifty_raw_data = asyncio.run(fetch_option_chain_from_nse('BANKNIFTY'))
-                vix_value = asyncio.run(fetch_vix_data())
+                nifty_raw_data = fetch_option_chain_from_nse('NIFTY')
+                banknifty_raw_data = fetch_option_chain_from_nse('BANKNIFTY')
+                vix_value = fetch_vix_data()
                 vix_data = get_vix_label(vix_value)
                 
                 nifty_info = compute_oi_pcr_and_underlying(nifty_raw_data)
