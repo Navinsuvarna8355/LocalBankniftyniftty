@@ -7,32 +7,29 @@ import logging
 from datetime import datetime
 import time
 import asyncio
-from playwright.async_api import async_playwright
+from pyppeteer import launch
 
 # Logging setup for debugging (debugging ke liye logging)
 logging.basicConfig(level=logging.INFO)
 
 async def get_session_with_cookies():
     """
-    Launches a headless browser to get cookies from NSE India website.
-    (Headless browser chalata hai taaki NSE India website se cookies mil sakein.)
+    Launches a headless browser (Pyppeteer) to get cookies from NSE India website.
+    (Pyppeteer headless browser chalata hai taaki NSE India website se cookies mil sakein.)
     """
     logging.info("Launching headless browser to get initial cookies...")
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch()
-            context = await browser.new_context()
-            page = await context.new_page()
-            await page.goto("https://www.nseindia.com")
-            # Wait for some time to ensure all cookies are loaded
-            await page.wait_for_load_state('networkidle')
-            cookies = await context.cookies()
-            session = requests.Session()
-            for cookie in cookies:
-                session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
-            await browser.close()
-            logging.info("Successfully obtained cookies and created session.")
-            return session
+        browser = await launch(headless=True)
+        page = await browser.newPage()
+        await page.goto("https://www.nseindia.com")
+        await page.waitFor(5000) # Wait for 5 seconds to ensure all cookies are loaded
+        cookies = await page.cookies()
+        session = requests.Session()
+        for cookie in cookies:
+            session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
+        await browser.close()
+        logging.info("Successfully obtained cookies and created session.")
+        return session
     except Exception as e:
         logging.error(f"Failed to get cookies from NSE: {e}")
         st.error("Cookies prapt karne mein galti. Kripya apna internet connection jaanchein.")
