@@ -6,7 +6,6 @@ import requests
 import logging
 import json
 from datetime import datetime
-from signal_strategy import determine_signal # This import seems to be missing in the original code but is present in your files.
 
 # Set up logging to show debug information
 logging.basicConfig(level=logging.INFO)
@@ -100,9 +99,24 @@ def compute_oi_pcr_and_underlying(data):
     }
 
 # --- Strategy and UI Functions ---
-# This function is now imported from signal_strategy.py
-# def determine_signal(pcr, trend, ema_signal):
-#     ...
+def determine_signal(pcr, trend, ema_signal):
+    """
+    Based on PCR, trend and EMA signal, determines the final trading signal.
+    This function was previously in signal_strategy.py.
+    """
+    signal = "SIDEWAYS"
+    suggested_option = None
+
+    if trend == "BULLISH" and ema_signal == "BUY" and pcr >= 1:
+        signal = "BUY"
+        suggested_option = "CALL"
+    elif trend == "BEARISH" and ema_signal == "SELL" and pcr <= 1:
+        signal = "SELL"
+        suggested_option = "PUT"
+    else:
+        signal = "SIDEWAYS"
+        suggested_option = None
+    return signal, suggested_option
 
 def get_vix_label(vix_value):
     """
@@ -264,8 +278,7 @@ def main():
     # --- Data Fetching and Display Logic ---
     
     # Fetch data only if refresh button is clicked or if data is not yet available
-    if refresh_button or (symbol_choice == 'NIFTY' and st.session_state.nifty_data is None) or \
-       (symbol_choice == 'BANKNIFTY' and st.session_state.banknifty_data is None):
+    if refresh_button or (st.session_state.nifty_data is None and st.session_state.banknifty_data is None):
         try:
             with st.spinner(f"Fetching live data for {symbol_choice}... Please wait."):
                 data = fetch_option_chain_from_api(symbol_choice)
