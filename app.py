@@ -17,11 +17,13 @@ def init_session():
     """
     Initializes a session with NSE to get cookies and mimic a real browser.
     (Cookies prapt karne aur asli browser ki nakal karne ke liye NSE ke saath ek session shuru karta hai.)
+    """
     try:
         s.get("https://www.nseindia.com", headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
         }, timeout=10)
+        logging.info("Session initialized successfully.")
     except requests.exceptions.RequestException as e:
         logging.error(f"Session initialization failed: {e}")
 
@@ -329,7 +331,7 @@ def main():
     if (time.time() - st.session_state.last_update_time > 60):
         try:
             with st.spinner("NIFTY aur BANKNIFTY ke liye live data fetch kar rahe hain..."):
-                init_session() # Session ko har bar initialize karein
+                # init_session() is now called before main()
                 # Dono symbols ke liye data ek saath fetch karein
                 nifty_raw_data = fetch_option_chain_from_api('NIFTY')
                 banknifty_raw_data = fetch_option_chain_from_api('BANKNIFTY')
@@ -523,4 +525,5 @@ def main():
         st.info("Trade log khaali hai. App automatic trades record karega.")
     
 if __name__ == "__main__":
+    init_session()
     main()
