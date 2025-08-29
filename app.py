@@ -10,28 +10,34 @@ import time
 # Logging setup for debugging (debugging ke liye logging)
 logging.basicConfig(level=logging.INFO)
 
-# Global session object to maintain a persistent connection (persistent connection ke liye global session object)
-s = requests.Session()
-
-def init_session():
+@st.cache_resource
+def get_session():
     """
-    Initializes a session with NSE to get cookies and mimic a real browser.
-    (Cookies prapt karne aur asli browser ki nakal karne ke liye NSE ke saath ek session shuru karta hai.)
+    Creates and caches a persistent session object to mimic a real browser.
+    (Asli browser ki nakal karne ke liye ek persistent session object banata aur cache karta hai.)
     """
+    s = requests.Session()
     try:
-        s.get("https://www.nseindia.com", headers={
+        logging.info("Initializing session with NSE...")
+        response = s.get("https://www.nseindia.com", headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.google.com',
+            'Connection': 'keep-alive',
         }, timeout=10)
-        logging.info("Session initialized successfully.")
+        response.raise_for_status()
+        logging.info("Session initialized successfully and cookies obtained.")
     except requests.exceptions.RequestException as e:
-        logging.error(f"Session initialization failed: {e}")
+        logging.error(f"Session initialization failed: {e}. Please check your internet connection or try again later.")
+        # Agar session initialize nahi ho paata, toh ek khaali session wapas karein
+        return None
+    return s
 
 # --- Data Fetching Functions ---
 def fetch_option_chain_from_api(symbol, retries=5, backoff_factor=1):
     """
-    Fetches live option chain data from a third-party API with retry logic and session.
-    (Retry logic aur session ke saath ek third-party API se live option chain data fetch karta hai.)
+    Fetches live option chain data from NSE API with retry logic and the cached session.
+    (Retry logic aur cached session ke saath NSE API se live option chain data fetch karta hai.)
     """
     api_url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     
@@ -44,18 +50,26 @@ def fetch_option_chain_from_api(symbol, retries=5, backoff_factor=1):
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
     }
     
+    session = get_session()
+    if not session:
+        st.error("Session could not be initialized. Please check your network.")
+        return None
+
     for i in range(retries):
         try:
             logging.info(f"Attempting to fetch data for {symbol}, attempt {i+1} of {retries}...")
-            response = s.get(api_url, headers=headers, timeout=10)
+            response = session.get(api_url, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
             logging.info("Data fetched successfully.")
             return data
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401 and i < retries - 1:
-                logging.warning(f"401 Unauthorized, re-initializing session and retrying in {backoff_factor * (2 ** i)} seconds...")
-                init_session()
+                logging.warning(f"401 Unauthorized, clearing cache and retrying in {backoff_factor * (2 ** i)} seconds...")
+                get_session.clear() # Clear the cached session and re-initialize
+                session = get_session()
+                if not session:
+                    return None
                 time.sleep(backoff_factor * (2 ** i))
             else:
                 logging.error(f"Error fetching data from API for {symbol}: {e}")
@@ -81,10 +95,14 @@ def fetch_vix_data(retries=5, backoff_factor=1):
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
     }
 
+    session = get_session()
+    if not session:
+        return None
+
     for i in range(retries):
         try:
             logging.info("Fetching India VIX data...")
-            response = s.get(vix_api_url, headers=headers, timeout=10)
+            response = session.get(vix_api_url, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
             
@@ -96,8 +114,11 @@ def fetch_vix_data(retries=5, backoff_factor=1):
             return None
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401 and i < retries - 1:
-                logging.warning(f"401 Unauthorized, re-initializing session and retrying in {backoff_factor * (2 ** i)} seconds...")
-                init_session()
+                logging.warning(f"401 Unauthorized, clearing cache and retrying in {backoff_factor * (2 ** i)} seconds...")
+                get_session.clear() # Clear the cached session and re-initialize
+                session = get_session()
+                if not session:
+                    return None
                 time.sleep(backoff_factor * (2 ** i))
             else:
                 logging.error(f"Error fetching India VIX data: {e}")
@@ -331,7 +352,6 @@ def main():
     if (time.time() - st.session_state.last_update_time > 60):
         try:
             with st.spinner("NIFTY aur BANKNIFTY ke liye live data fetch kar rahe hain..."):
-                # init_session() is now called before main()
                 # Dono symbols ke liye data ek saath fetch karein
                 nifty_raw_data = fetch_option_chain_from_api('NIFTY')
                 banknifty_raw_data = fetch_option_chain_from_api('BANKNIFTY')
@@ -525,5 +545,4 @@ def main():
         st.info("Trade log khaali hai. App automatic trades record karega.")
     
 if __name__ == "__main__":
-    init_session()
     main()
