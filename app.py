@@ -370,7 +370,7 @@ def main():
                 
                 banknifty_info = compute_oi_pcr_and_underlying(banknifty_raw_data)
                 if banknifty_info['underlying']:
-                    pcr_used_banknifty = banknifty_info['pcr_near'] if use_near_pcr else banknifty_info['pcr_total']
+                    pcr_used_banknifty = banknifty_info['pcr_near'] if use_near_pcr else nifty_info['pcr_total']
                     trend_banknifty = "BULLISH" if pcr_used_banknifty >= 1 else "BEARISH"
                     signal_banknifty, suggested_side_banknifty = determine_signal(pcr_used_banknifty, trend_banknifty, ema_signal_choice)
                     oi_levels_banknifty = find_oi_based_sr_levels(banknifty_raw_data)
